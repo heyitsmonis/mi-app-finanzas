@@ -723,6 +723,20 @@ function renderSmartDashboardBlocks(){
   document.getElementById('smartMonthInsight').innerHTML=`<div class="bg-white border border-gray-100 rounded-2xl card-shadow p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full ${heavyFree<0?'bg-red-50':'bg-aqua-50'} flex items-center justify-center"><i data-lucide="sparkles" class="w-5 h-5 ${heavyFree<0?'text-red-400':'text-aqua-500'}"></i></div><div><h3 class="font-bold text-gray-800">Resumen inteligente del mes</h3><p class="text-sm text-gray-500">${insight}</p></div></div>`;
   document.getElementById('dashboardSmartBlocks').innerHTML=`<div class="col-span-4 bg-white rounded-2xl card-shadow border border-gray-100 p-4"><h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2"><i data-lucide="bell" class="w-4 h-4 text-durazno-500"></i>Próximos pagos</h3><div class="max-h-[420px] overflow-y-auto pr-1 pb-2">${upcoming}</div></div><div class="col-span-8 bg-white rounded-2xl card-shadow border border-gray-100 p-4"><div class="flex items-center justify-between gap-3 mb-3"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="list-checks" class="w-4 h-4 text-azul-500"></i>Detalle de apartados del mes</h3><span class="text-[11px] text-gray-400">Resumen por tipo</span></div>${quickStats}<div class="grid grid-cols-2 gap-3 mt-3">${typeRows}</div></div>`;
 }
+function getBiweeklyPlannedTotal(q,m=state.currentMonth,y=state.currentYear){
+  const p=getPaymentsForMonth(m,y);
+  const all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)];
+  return all.reduce((sum,item)=>sum+getAmountToSetAside(item,q),0);
+}
+function getBiweeklyApartedTotal(q,m=state.currentMonth,y=state.currentYear){
+  const p=getPaymentsForMonth(m,y);
+  const all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)];
+  return all.reduce((sum,item)=>sum+getRealSetAsideAmount(item,q),0);
+}
+function getBiweeklyFreeAmount(q,m=state.currentMonth,y=state.currentYear){
+  const salary=state.config.salaryBiweekly||0;
+  return salary-Math.max(getBiweeklyPlannedTotal(q,m,y),getBiweeklyApartedTotal(q,m,y));
+}
 function renderSummaryCards(){
   const p=getPaymentsForMonth(state.currentMonth,state.currentYear),all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)],paymentItems=[...p.fixed,...p.inst,...p.vari],salary=state.config.salaryBiweekly||0,
   q1=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),
@@ -731,7 +745,7 @@ function renderSummaryCards(){
   q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0),
   paidQ1=paymentItems.reduce((s,i)=>s+(i.paid&&getSplitMode(i)==='Q2 anterior + Q1 del mes de pago'&&getAmountToSetAside(i,1)>0?getPaymentAmount(i):0),0),
   paidQ2=paymentItems.reduce((s,i)=>s+(i.paid&&getSplitMode(i)!=='Q2 anterior + Q1 del mes de pago'&&getAmountToSetAside(i,2)>0?getPaymentAmount(i):0),0),
-  s1=getSavingsByQuincena(p,1),s2=getSavingsByQuincena(p,2),st=s1+s2,totalAccum=totalConfirmedSavings(state.savings),f1=salary-Math.max(q1,q1Apart),f2=salary-Math.max(q2,q2Apart);
+  s1=getSavingsByQuincena(p,1),s2=getSavingsByQuincena(p,2),st=s1+s2,totalAccum=totalConfirmedSavings(state.savings),f1=getBiweeklyFreeAmount(1,state.currentMonth,state.currentYear),f2=getBiweeklyFreeAmount(2,state.currentMonth,state.currentYear);
 
   const mini=(l,v,c,paid=null)=>`
     <div class="bg-white/55 border border-white/70 rounded-xl p-3">
@@ -876,7 +890,7 @@ function renderMonthSummary(){
   const q1Total=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),q2Total=all.reduce((s,i)=>s+getAmountToSetAside(i,2),0);
   const q1Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,1),0),q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0);
   const q1Missing=Math.max(0,q1Total-q1Apart),q2Missing=Math.max(0,q2Total-q2Apart);
-  const q1Free=salary-Math.max(q1Total,q1Apart),q2Free=salary-Math.max(q2Total,q2Apart);
+  const q1Free=getBiweeklyFreeAmount(1,state.currentMonth,state.currentYear),q2Free=getBiweeklyFreeAmount(2,state.currentMonth,state.currentYear);
   const monthTotal=q1Total+q2Total,monthApart=q1Apart+q2Apart,monthMissing=Math.max(0,monthTotal-monthApart),pct=monthTotal?Math.round((monthApart/monthTotal)*100):100;
   const status=(missing,total)=> total===0?{label:'Sin apartados',color:'text-gray-400',bg:'bg-gray-50',border:'border-gray-100',icon:'minus-circle'}:missing<=0?{label:'Meta completada',color:'text-menta-500',bg:'bg-menta-50',border:'border-menta-100',icon:'check-circle'}:{label:`Faltan ${fmt(missing)}`,color:'text-durazno-500',bg:'bg-durazno-50',border:'border-durazno-100',icon:'clock'};
   const qCard=(q,total,apart,missing,free)=>{const st=status(missing,total);const qLabel=q===1?'Q1 · 1ª quincena':'Q2 · 2ª quincena';const localPct=total?Math.round((apart/total)*100):100;return `<div class="${st.bg} ${st.border} border rounded-xl p-3"><div class="flex items-center justify-between gap-2 mb-2"><div class="font-bold text-gray-800 text-sm">${qLabel}</div><span class="text-[10px] px-2 py-0.5 rounded-full bg-white/70 ${st.color} font-semibold border border-white">${st.label}</span></div><div class="grid grid-cols-2 gap-2 text-xs mb-3"><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">A apartar</span><div class="font-bold text-rosa-500 text-sm">${fmt(total)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Ya apartado</span><div class="font-bold text-azul-500 text-sm">${fmt(apart)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Falta</span><div class="font-bold ${missing<=0?'text-menta-500':'text-durazno-500'} text-sm">${fmt(missing)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Libre</span><div class="font-bold ${free>=0?'text-aqua-500':'text-red-400'} text-sm">${fmt(free)}</div></div></div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>Avance apartado</span><span>${localPct}%</span></div><div class="w-full bg-white h-2 rounded-full overflow-hidden"><div class="${missing<=0?'bg-menta-400':'bg-azul-400'} h-2 rounded-full" style="width:${Math.min(100,Math.max(3,localPct))}%"></div></div></div>`;};
@@ -983,7 +997,7 @@ function getYearBiweeklyData(){
     const q1=all.reduce((s,it)=>s+getAmountToSetAside(it,1),0), q2=all.reduce((s,it)=>s+getAmountToSetAside(it,2),0);
     const q1Apart=all.reduce((s,it)=>s+getRealSetAsideAmount(it,1),0), q2Apart=all.reduce((s,it)=>s+getRealSetAsideAmount(it,2),0);
     const s1=getSavingsByQuincena(p,1), s2=getSavingsByQuincena(p,2);
-    const free1=salary-Math.max(q1,q1Apart), free2=salary-Math.max(q2,q2Apart);
+    const free1=getBiweeklyFreeAmount(1,month,state.currentYear), free2=getBiweeklyFreeAmount(2,month,state.currentYear);
     const used1=salary>0?Math.min(140,Math.round((Math.max(q1,q1Apart)/salary)*100)):0;
     const used2=salary>0?Math.min(140,Math.round((Math.max(q2,q2Apart)/salary)*100)):0;
     return { name, month, q1, q2, s1, s2, free1, free2, used1, used2, h1:getBiweeklyHealth(free1,used1), h2:getBiweeklyHealth(free2,used2) };
@@ -1447,7 +1461,16 @@ function runSmokeTests(){
     console.assert(getStatusVisual('apartado').text==='text-azul-500','apartado blue');
     console.assert(getStatusVisual('pagado').text==='text-menta-500','pagado green');
     console.assert(getStatusVisual('pendiente').text==='text-durazno-500','pendiente orange');
-    console.assert((8100-Math.max(4660.50,0))===3439.50,'free amount formula ok');
+    const salary=state.config.salaryBiweekly||0;
+    for(let m=0;m<12;m++){
+      [1,2].forEach(q=>{
+        const planned=getBiweeklyPlannedTotal(q,m,state.currentYear);
+        const aparted=getBiweeklyApartedTotal(q,m,state.currentYear);
+        const free=getBiweeklyFreeAmount(q,m,state.currentYear);
+        const expected=salary-Math.max(planned,aparted);
+        console.assert(Math.abs(free-expected)<0.01,`libre Q${q} ${MONTHS[m]} coincide`);
+      });
+    }
   }catch(e){
     console.warn('Revisión interna omitida para no bloquear la app',e);
   }
@@ -1457,5 +1480,5 @@ render();
 </script>
 
 </body>
-<!-- canvas refresh preview ok -->
+<!-- canvas refresh final formulas ok -->
 </html>
