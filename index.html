@@ -361,15 +361,20 @@ function getAmountToSetAside(item,q){
   return halfAmount;
 }
 function isSetAside(item,q){
-  if(getPaymentCollection(item)==='savings') return isSavingConfirmed(item);
+  if(getPaymentCollection(item)==='savings'){
+    const target=q===1?'Q1':'Q2';
+    return isSavingConfirmed(item) && normalizeQuincena(item.quincena,item.date)===target;
+  }
   if(getPaymentCollection(item)==='goalContrib') return isGoalContributionSaved(item.goalId||item.id,q,item.__viewMonth??state.currentMonth,item.__viewYear??state.currentYear);
   return q===1?!!item.apartadoQ1:!!item.apartadoQ2;
 }
 function paidArr(arr){return arr.filter(p=>p.paid).reduce((s,p)=>s+getPaymentAmount(p),0);}
 function getRealSetAsideAmount(item,q){
+  const plannedForThisQ=getAmountToSetAside(item,q);
+  if(plannedForThisQ<=0) return 0;
   if(!isSetAside(item,q)) return 0;
   if(getPaymentCollection(item)==='savings') return getSavingRealAmount(item);
-  return getAmountToSetAside(item,q);
+  return plannedForThisQ;
 }
 function getSetAsidePaidAmount(arr){return arr.reduce((sum,item)=>sum+getRealSetAsideAmount(item,1)+getRealSetAsideAmount(item,2),0);}
 function getSavingsByQuincena(payments,q){const target=q===1?'Q1':'Q2';return payments.sav.filter(s=>isSavingConfirmed(s)&&normalizeQuincena(s.quincena,s.date)===target).reduce((sum,s)=>sum+getSavingRealAmount(s),0);}
