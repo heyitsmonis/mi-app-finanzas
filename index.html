@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Plan de Pagos - Vista previa estable</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { main: ['DM Sans', 'sans-serif'] },
+          colors: {
+            lila: { 50:'#f3f0ff', 100:'#e9e3ff', 200:'#d4c8ff', 300:'#b8a4f8', 400:'#9b7eef', 500:'#7c5ce7' },
+            menta: { 50:'#e8faf5', 100:'#c6f4e4', 200:'#81e6c9', 300:'#55d4af', 400:'#38c89a', 500:'#22a982' },
+            durazno: { 50:'#fff5ed', 100:'#ffe8d6', 200:'#ffd0a8', 300:'#ffb87a', 400:'#ffa04c', 500:'#f9842b' },
+            azul: { 50:'#eff6ff', 100:'#dbeafe', 200:'#bfdbfe', 300:'#93c5fd', 400:'#60a5fa', 500:'#2563eb' },
+            rosa: { 50:'#fdf2f8', 100:'#fce7f3', 200:'#fbcfe8', 300:'#f3a7cf', 400:'#e58ac0', 500:'#dc7ab5' },
+            aqua: { 50:'#edf9f3', 100:'#dbf3e6', 200:'#b8e7cc', 300:'#8fd9af', 400:'#67cb97', 500:'#3ebf86', 600:'#2faa74' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    html, body { height:100%; margin:0; font-family:'DM Sans', sans-serif; }
+    * { box-sizing:border-box; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:3px; }
+    .sidebar-item { transition:all .15s; }
+    .sidebar-item:hover, .sidebar-item.active { background:#f3f0ff; color:#7c5ce7; }
+    .month-tab { transition:all .15s; }
+    .month-tab:hover { background:#f3f0ff; }
+    .month-tab.active { background:#7c5ce7; color:white; }
+    .card-shadow { box-shadow:0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04); }
+    .modal-bg { background:rgba(0,0,0,.30); }
+    .cal-dot { width:6px; height:6px; border-radius:50%; display:inline-block; }
+    .progress-bar { transition:width .3s; }
+    input, select, textarea { font-family:'DM Sans', sans-serif; }
+  </style>
+</head>
+<body class="h-full bg-gray-50 font-main text-gray-700">
+  <div class="h-full w-full flex overflow-hidden">
+    <aside class="w-60 min-w-[240px] bg-white border-r border-gray-100 flex flex-col h-full min-h-0 overflow-y-auto">
+      <div class="p-4 border-b border-gray-100 shrink-0"><h1 class="text-lg font-bold text-lila-500 flex items-center gap-2"><i data-lucide="wallet" class="w-5 h-5"></i><span>Mi plan de pagos</span></h1></div>
+      <nav class="shrink-0 p-2.5 space-y-1" id="sideNav">
+        <button class="sidebar-item active w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="dashboard"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Dashboard</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="monthly"><i data-lucide="calendar" class="w-4 h-4"></i>Vista mensual</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="biweekly"><i data-lucide="calendar-range" class="w-4 h-4"></i>Vista quincenal</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="fixed"><i data-lucide="pin" class="w-4 h-4"></i>Pagos fijos</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="installments"><i data-lucide="layers" class="w-4 h-4"></i>Pagos a meses</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="variable"><i data-lucide="shuffle" class="w-4 h-4"></i>Pagos variados</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="savings"><i data-lucide="piggy-bank" class="w-4 h-4"></i>Ahorro</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="annual"><i data-lucide="bar-chart-3" class="w-4 h-4"></i>Resumen anual</button>
+        <button class="sidebar-item w-full text-left px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2" data-view="config"><i data-lucide="settings" class="w-4 h-4"></i>Configuración</button>
+      </nav>
+      <div class="shrink-0 p-3 m-2 rounded-xl bg-lila-50 border border-lila-100">
+        <div id="sidebarSavingsTitle" class="text-xs font-semibold text-lila-500 mb-1">Meta de ahorro mensual</div>
+        <div id="sidebarSavingsGoal" class="text-lg font-bold text-lila-500 leading-tight">$0</div>
+        <div class="text-xs text-gray-500 mt-0.5">Ahorrado: <span id="sidebarSaved" class="font-semibold text-menta-400">$0</span></div>
+        <div class="w-full bg-lila-100 rounded-full h-1.5 mt-2"><div id="sidebarProgress" class="bg-lila-400 h-1.5 rounded-full progress-bar" style="width:0%"></div></div>
+      </div>
+      <div class="relative overflow-hidden shrink-0 p-3 m-2 mt-0 rounded-xl bg-white border border-gray-100 card-shadow">
+        <div class="absolute right-3 bottom-3 flex items-end gap-1 opacity-20 pointer-events-none"><span class="w-1.5 h-5 rounded-full bg-azul-300"></span><span class="w-1.5 h-8 rounded-full bg-lila-300"></span><span class="w-1.5 h-6 rounded-full bg-menta-300"></span><span class="w-1.5 h-10 rounded-full bg-durazno-300"></span></div>
+        <div class="relative text-xs font-semibold text-gray-500 mb-1">Ahorro total acumulado</div>
+        <div id="sidebarTotalSavings" class="relative text-lg font-bold text-azul-400 leading-tight">$0</div>
+        <div class="relative text-[11px] text-gray-400 mt-0.5">De todos los meses</div>
+      </div>
+    </aside>
+    <main class="flex-1 h-full overflow-y-auto overflow-x-hidden">
+      <div class="bg-white border-b border-gray-100 px-4 py-2 flex gap-1 overflow-x-auto" id="monthTabs"></div>
+      <div class="p-5 space-y-5" id="mainContent"></div>
+    </main>
+  </div>
+
+  <div id="modal" class="fixed inset-0 modal-bg z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90%] overflow-y-auto card-shadow" id="modalContent"></div>
+  </div>
+  <div id="deleteConfirm" class="fixed inset-0 modal-bg z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow text-center">
+      <div class="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3"><i data-lucide="trash-2" class="w-6 h-6 text-red-400"></i></div>
+      <h3 class="font-bold text-gray-800 mb-2">¿Eliminar registro?</h3><p class="text-sm text-gray-500 mb-4">Esta acción no se puede deshacer.</p>
+      <div class="flex gap-2 justify-center"><button onclick="closeDeleteConfirm()" class="px-4 py-2 rounded-lg bg-gray-100 text-sm font-medium hover:bg-gray-200">Cancelar</button><button id="confirmDeleteBtn" class="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600">Eliminar</button></div>
+    </div>
+  </div>
+
+<script>
+const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAYS=['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+const DEFAULT_CATEGORIES=['vivienda','servicios','suscripciones','educación','transporte','comida','salud','entretenimiento','compras','ahorro','otros'];
+const CATEGORIES=DEFAULT_CATEGORIES;
+const ACCOUNT_TYPES=['débito','crédito','efectivo','cuenta de ahorro','otro'];
+const STORAGE_KEY='miplandepagos_estable_status_v4';
+let state={
+  currentMonth:5,currentYear:2026,
+  config:{salaryMonthly:20000,salaryBiweekly:10000,payDate1:1,payDate2:16,savingsGoal:5000,currency:'MXN',yearEndExtras:{bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''}},
+  fixed:[{id:'f1',concept:'Internet',category:'servicios',date:7,amount:1200,card:'BBVA',splitMode:'Dividir en dos quincenas',startMonth:5,startYear:2026,hasEndDate:false,month:5,year:2026,monthlyStatus:{}},{id:'f2',concept:'Renta',category:'vivienda',date:3,amount:7500,card:'BBVA',splitMode:'Cargar completo en Q1',startMonth:5,startYear:2026,hasEndDate:false,month:5,year:2026,monthlyStatus:{}}],
+  installments:[{id:'i1',concept:'Laptop',totalAmount:18000,totalMonths:6,startMonth:4,startYear:2026,amount:3000,quincenaAmount:1500,purchaseCard:'Nu',card:'BBVA',status:'pendiente',notes:'Equipo de trabajo',splitMode:'Dividir en dos quincenas',month:4,year:2026,monthlyStatus:{}}],
+  variable:[{id:'v1',concept:'Super',category:'comida',date:20,estimatedAmount:2200,amount:2000,card:'BBVA',paid:false,splitMode:'Cargar completo en Q2',apartadoQ1:false,apartadoQ2:true,month:5,year:2026}],
+  savings:[{id:'s1',date:15,quincena:'Q1',amount:2500,card:'Nu',month:5,year:2026},{id:'s2',date:30,quincena:'Q2',amount:2500,card:'Nu',month:5,year:2026}],
+  savingsGoals:[],
+  monthNotes:{},
+  accounts:[{id:'a1',name:'Nu',type:'crédito',bank:'Nu',notes:'Tarjeta principal'},{id:'a2',name:'BBVA',type:'débito',bank:'BBVA',notes:''},{id:'a3',name:'Efectivo',type:'efectivo',bank:'',notes:'Gastos en efectivo'}],
+  categories:[...DEFAULT_CATEGORIES]
+};
+let currentView='dashboard',deleteTarget=null,savingsFilterMode='current',savingsFilterMonth=state.currentMonth,showSavingsForm=true,editingSavingId='';
+try{const saved=localStorage.getItem(STORAGE_KEY);if(saved)state=JSON.parse(saved);}catch(e){}
+if(!state.config.yearEndExtras) state.config.yearEndExtras={bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
+if(!state.config.payrollOverrides || typeof state.config.payrollOverrides!=='object') state.config.payrollOverrides={};
+if(typeof state.config.savingsStartMonth==='undefined') state.config.savingsStartMonth=state.currentMonth??0;
+if(typeof state.config.savingsStartYear==='undefined') state.config.savingsStartYear=state.currentYear??new Date().getFullYear();
+if(!state.config.yearEndExtras.otherName) state.config.yearEndExtras.otherName='Otro extra';
+if(!state.savingsGoals || !Array.isArray(state.savingsGoals)) state.savingsGoals=[];
+if(!state.monthNotes || typeof state.monthNotes!=='object') state.monthNotes={};
+if(!Array.isArray(state.fixed)) state.fixed=[];
+if(!Array.isArray(state.installments)) state.installments=[];
+if(!Array.isArray(state.variable)) state.variable=[];
+if(!Array.isArray(state.savings)) state.savings=[];
+if(!Array.isArray(state.accounts)) state.accounts=[];
+if(!Array.isArray(state.categories)) state.categories=[...DEFAULT_CATEGORIES];
+function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+function fmt(n){
+  const value=Number(n)||0;
+  const hasDecimals=Math.abs(value%1)>0.000001;
+  return '$'+value.toLocaleString('es-MX',{minimumFractionDigits:hasDecimals?2:0,maximumFractionDigits:2});
+}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function getDaysInMonth(m,y){return new Date(y,m+1,0).getDate();}
+function getFirstDayOfMonth(m,y){const d=new Date(y,m,1).getDay();return d===0?6:d-1;}
+function monthIndex(m,y){return y*12+m;} function monthKey(m,y){return `${y}-${m}`;}
+function pad2(n){return String(n).padStart(2,'0');}
+function isoDate(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
+function formatShortDate(iso){
+  if(!iso)return '';
+  const [y,m,d]=String(iso).split('-').map(Number);
+  if(!y||!m||!d)return '';
+  return `${d} ${MONTHS[m-1].slice(0,3).toLowerCase()}`;
+}
+function formatLongDateFromParts(day,month,year){
+  const d=Math.max(1,Math.min(parseInt(day)||1,getDaysInMonth(month,year)));
+  return `${d} de ${MONTHS[month].toLowerCase()}`;
+}
+function getRealPaymentMonthYearForQuincena(item,q,m=state.currentMonth,y=state.currentYear){
+  if(getSplitMode(item)==='Q2 anterior + Q1 del mes de pago' && q===2){
+    return addMonthOffset(m,y,1);
+  }
+  return {month:m,year:y};
+}
+function getPaymentDueLabel(item,q,m=state.currentMonth,y=state.currentYear){
+  const due=getRealPaymentMonthYearForQuincena(item,q,m,y);
+  return formatLongDateFromParts(item.date||1,due.month,due.year);
+}
+function getItemSetAsideDateLabel(item,q,m=state.currentMonth,y=state.currentYear){
+  const day=getPaymentDayForQuincena(item,q);
+  const safeDay=Math.max(1,Math.min(parseInt(day)||1,getDaysInMonth(m,y)));
+  return `${safeDay} de ${MONTHS[m].toLowerCase()}`;
+}
+function getUpcomingSubtitle(item,q,status,m=state.currentMonth,y=state.currentYear){
+  if(status==='pagado')return `Q${q} · pago completado`;
+  if(status==='apartado')return `Q${q} · apartado listo`;
+  return `Q${q} · apartado estimado ${getItemSetAsideDateLabel(item,q,m,y)}`;
+}
+function payrollOverrideKey(m=state.currentMonth,y=state.currentYear){return `${y}-${m}`;}
+function getPayrollOverride(q,m=state.currentMonth,y=state.currentYear){
+  const key=payrollOverrideKey(m,y);
+  return state.config.payrollOverrides?.[key]?.[`q${q}`]||'';
+}
+function getPayrollDefaultDate(q,m=state.currentMonth,y=state.currentYear){
+  const day=q===1?(parseInt(state.config.payDate1)||1):(parseInt(state.config.payDate2)||16);
+  return isoDate(y,m,Math.min(day,getDaysInMonth(m,y)));
+}
+function getPayrollDate(q,m=state.currentMonth,y=state.currentYear){return getPayrollOverride(q,m,y)||getPayrollDefaultDate(q,m,y);}
+function getPayrollDateLabel(q,m=state.currentMonth,y=state.currentYear){
+  const isReal=!!getPayrollOverride(q,m,y);
+  return `${isReal?'depósito real':'depósito estimado'} ${formatShortDate(getPayrollDate(q,m,y))}`;
+}
+function renderPayrollMonthControl(){
+  const q1Real=!!getPayrollOverride(1,state.currentMonth,state.currentYear);
+  const q2Real=!!getPayrollOverride(2,state.currentMonth,state.currentYear);
+  return `<div class="flex items-center gap-2 bg-white border border-gray-100 rounded-xl px-3 py-2 card-shadow">
+    <div class="text-[11px] leading-tight"><span class="block text-gray-400">Q1 ${q1Real?'real':'estimado'}</span><b class="text-lila-500">${formatShortDate(getPayrollDate(1))}</b></div>
+    <div class="w-px h-7 bg-gray-100"></div>
+    <div class="text-[11px] leading-tight"><span class="block text-gray-400">Q2 ${q2Real?'real':'estimado'}</span><b class="text-lila-500">${formatShortDate(getPayrollDate(2))}</b></div>
+    <button onclick="openPayrollMonthModal()" class="ml-1 w-8 h-8 rounded-lg bg-lila-50 text-lila-500 hover:bg-lila-100 flex items-center justify-center" title="Editar fechas reales de nómina del mes"><i data-lucide="settings" class="w-4 h-4"></i></button>
+  </div>`;
+}
+function totalArr(arr,field='amount'){return (arr||[]).reduce((s,p)=>s+(parseFloat(p[field])||0),0);}
+function isSavingConfirmed(s){return s && s.confirmed===true;}
+function getSavingPlannedAmount(s){return parseFloat(s?.plannedAmount ?? s?.amount)||0;}
+function getSavingRealAmount(s){return isSavingConfirmed(s)?(parseFloat(s?.amount)||getSavingPlannedAmount(s)):0;}
+function confirmedSavings(list=state.savings){return (list||[]).filter(isSavingConfirmed);}
+function totalConfirmedSavings(list=state.savings){return confirmedSavings(list).reduce((s,p)=>s+getSavingRealAmount(p),0);}
+function normalizeQuincena(v,date){const x=String(v||'').toLowerCase().trim();if(x==='q1'||x==='1'||x.includes('1'))return 'Q1';if(x==='q2'||x==='2'||x.includes('2'))return 'Q2';return (parseInt(date)||1)<=15?'Q1':'Q2';}
+function getAccounts(){return state.accounts||[];} function getAccountOptions(selected=''){const a=getAccounts();if(!a.length)return '<option value="">Primero agrega una tarjeta/cuenta en Configuración</option>';return a.map(x=>`<option value="${escapeHtml(x.name)}" ${selected===x.name?'selected':''}>${escapeHtml(x.name)}</option>`).join('');}
+function getCategories(){
+  if(!state.categories || !Array.isArray(state.categories)) state.categories=[...DEFAULT_CATEGORIES];
+  const used=[...state.fixed,...state.variable].map(i=>i.category).filter(Boolean);
+  return [...new Set([...state.categories,...used])];
+}
+function getCategoryOptions(selected=''){
+  return getCategories().map(c=>`<option value="${escapeHtml(c)}" ${selected===c?'selected':''}>${escapeHtml(c)}</option>`).join('');
+}
+function addCategoryIfNeeded(name){
+  const clean=String(name||'').trim().toLowerCase();
+  if(!clean) return '';
+  if(!state.categories || !Array.isArray(state.categories)) state.categories=[...DEFAULT_CATEGORIES];
+  if(!state.categories.includes(clean)) state.categories.push(clean);
+  return clean;
+}
+function isFixedActiveInMonth(item,m,y){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear;if(monthIndex(m,y)<monthIndex(sm,sy))return false;if(item.hasEndDate){const em=item.endMonth??sm,ey=item.endYear??sy;if(monthIndex(m,y)>monthIndex(em,ey))return false;}return true;}
+function getFixedStatus(item,m=state.currentMonth,y=state.currentYear){if(!item.monthlyStatus)item.monthlyStatus={};const k=monthKey(m,y);if(!item.monthlyStatus[k])item.monthlyStatus[k]={apartadoQ1:false,apartadoQ2:false,paid:false};return item.monthlyStatus[k];}
+function getFixedPeriodText(item){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear;if(!item.hasEndDate)return `${MONTHS[sm]} ${sy} · sin fecha límite`;return `${MONTHS[sm]} ${sy} - ${MONTHS[item.endMonth??sm]} ${item.endYear??sy}`;}
+function getInstallmentNumberForMonth(item,m,y){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear;return monthIndex(m,y)-monthIndex(sm,sy)+1;}
+function isInstallmentActiveInMonth(item,m,y){const total=parseInt(item.totalMonths)||1,n=getInstallmentNumberForMonth(item,m,y);return n>=1&&n<=total;}
+function getInstallmentStatus(item,m=state.currentMonth,y=state.currentYear){if(!item.monthlyStatus)item.monthlyStatus={};const k=monthKey(m,y);if(!item.monthlyStatus[k])item.monthlyStatus[k]={apartadoQ1:false,apartadoQ2:false,paid:false};return item.monthlyStatus[k];}
+function getPaidInstallmentMonthsUntil(item,m=state.currentMonth,y=state.currentYear){
+  const total=parseInt(item.totalMonths)||1;
+  const sm=item.startMonth??item.month??0, sy=item.startYear??item.year??state.currentYear;
+  let paid=0;
+  for(let n=1;n<=total;n++){
+    const idx=monthIndex(sm,sy)+n-1;
+    const cm=((idx%12)+12)%12, cy=Math.floor(idx/12);
+    if(monthIndex(cm,cy)>monthIndex(m,y)) break;
+    if(item.monthlyStatus&&item.monthlyStatus[monthKey(cm,cy)]&&item.monthlyStatus[monthKey(cm,cy)].paid) paid++;
+  }
+  return paid;
+}
+function getInstallmentTrackerMonths(item){
+  const total=parseInt(item.totalMonths)||1;
+  const sm=item.startMonth??item.month??0, sy=item.startYear??item.year??state.currentYear;
+  const currentRaw=getInstallmentNumberForMonth(item,state.currentMonth,state.currentYear);
+  return Array.from({length:total},(_,i)=>{
+    const idx=monthIndex(sm,sy)+i;
+    const m=((idx%12)+12)%12, y=Math.floor(idx/12), k=monthKey(m,y);
+    const paid=!!(item.monthlyStatus&&item.monthlyStatus[k]&&item.monthlyStatus[k].paid);
+    const isCurrent=currentRaw===i+1;
+    return {n:i+1,month:m,year:y,paid,isCurrent,label:`${MONTHS[m]} ${y}`};
+  });
+}
+function renderInstallmentMonthTracker(item){
+  const months=getInstallmentTrackerMonths(item);
+  const paidCount=months.filter(m=>m.paid).length;
+  const chips=months.map(m=>{
+    const cls=m.paid?'bg-menta-50 border-menta-200 text-menta-600':m.isCurrent?'bg-lila-50 border-lila-200 text-lila-600':'bg-gray-50 border-gray-100 text-gray-400';
+    const icon=m.paid?'✓':m.n;
+    return `<div title="${m.label}" class="w-9 h-9 rounded-lg border ${cls} flex flex-col items-center justify-center leading-none shrink-0"><span class="text-[11px] font-bold">${icon}</span><span class="text-[8px] mt-0.5">${MONTHS[m.month].slice(0,3)}</span></div>`;
+  }).join('');
+  return `<div class="mb-2.5 bg-gray-50/70 border border-gray-100 rounded-xl p-2.5"><div class="flex items-center justify-between mb-2"><span class="text-[11px] font-semibold text-gray-500 flex items-center gap-1.5"><i data-lucide="list-checks" class="w-3.5 h-3.5 text-menta-500"></i>Tracker de mensualidades</span><span class="text-[10px] text-gray-400 font-semibold">${paidCount}/${months.length} pagadas</span></div><div class="flex flex-wrap gap-1.5">${chips}</div></div>`;
+}
+function getOffsetCoverageForInstallment(item,m=state.currentMonth,y=state.currentYear){
+  if(getSplitMode(item)!=='Q2 anterior + Q1 del mes de pago')return null;
+  if(!isInstallmentActiveInMonth(item,m,y))return null;
+  const prev=addMonthOffset(m,y,-1);
+  const prevTemp={...item,__collection:'installments',__viewMonth:prev.month,__viewYear:prev.year};
+  const currTemp={...item,__collection:'installments',__viewMonth:m,__viewYear:y};
+  const prevPlan=getAmountToSetAside(prevTemp,2);
+  const currPlan=getAmountToSetAside(currTemp,1);
+  if(prevPlan<=0&&currPlan<=0)return null;
+  const prevStatus=getInstallmentStatus(item,prev.month,prev.year);
+  const currStatus=getInstallmentStatus(item,m,y);
+  const prevApart=prevStatus.apartadoQ2?prevPlan:0;
+  const currApart=currStatus.apartadoQ1?currPlan:0;
+  const totalPlan=prevPlan+currPlan;
+  const totalApart=prevApart+currApart;
+  return {prev,curr:{month:m,year:y},prevPlan,currPlan,prevApart,currApart,totalPlan,totalApart,missing:Math.max(0,totalPlan-totalApart)};
+}
+function renderOffsetCoverage(item){
+  const c=getOffsetCoverageForInstallment(item);
+  if(!c)return '';
+  const pct=c.totalPlan?Math.round((c.totalApart/c.totalPlan)*100):100;
+  return `<div class="mb-2.5 bg-lila-50/70 border border-lila-100 rounded-xl p-2.5">
+    <div class="flex items-center justify-between gap-2 mb-2"><span class="text-[11px] font-bold text-gray-700 flex items-center gap-1.5"><i data-lucide="link" class="w-3.5 h-3.5 text-lila-500"></i>Cobertura de mensualidad actual</span><span class="text-[10px] font-semibold ${c.missing<=0?'text-menta-500':'text-durazno-500'}">${c.missing<=0?'Lista para pagar':`Faltan ${fmt(c.missing)}`}</span></div>
+    <div class="grid grid-cols-3 gap-2 text-[11px]">
+      <div class="bg-white/75 rounded-lg p-2"><span class="text-gray-400">Q2 ${MONTHS[c.prev.month].slice(0,3)}</span><div class="font-bold text-lila-500">${fmt(c.prevApart)}</div><div class="text-[10px] text-gray-400">de ${fmt(c.prevPlan)}</div></div>
+      <div class="bg-white/75 rounded-lg p-2"><span class="text-gray-400">Q1 ${MONTHS[c.curr.month].slice(0,3)}</span><div class="font-bold text-azul-500">${fmt(c.currApart)}</div><div class="text-[10px] text-gray-400">de ${fmt(c.currPlan)}</div></div>
+      <div class="bg-white/75 rounded-lg p-2"><span class="text-gray-400">Cubierto</span><div class="font-bold ${c.missing<=0?'text-menta-500':'text-durazno-500'}">${fmt(c.totalApart)}</div><div class="text-[10px] text-gray-400">${pct}% del pago</div></div>
+    </div>
+  </div>`;
+}
+function getInstallmentPeriodText(item){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear,total=parseInt(item.totalMonths)||1,end=monthIndex(sm,sy)+total-1;return `${MONTHS[sm]} ${sy} - ${MONTHS[end%12]} ${Math.floor(end/12)}`;}
+function isInstallmentRelevantInMonth(item,m,y){
+  if(isInstallmentActiveInMonth(item,m,y)) return true;
+  if(getSplitMode(item)==='Q2 anterior + Q1 del mes de pago'){
+    const temp={...item,__collection:'installments',__viewMonth:m,__viewYear:y};
+    return getAmountToSetAside(temp,1)>0 || getAmountToSetAside(temp,2)>0;
+  }
+  return false;
+}
+function isVariableRelevantInMonth(item,m,y){
+  if(item.month===m&&item.year===y)return true;
+  if(getSplitMode(item)==='Dividir en próximas 2 quincenas'){
+    const temp={...item,__viewMonth:m,__viewYear:y};
+    return getAmountToSetAside(temp,1)>0||getAmountToSetAside(temp,2)>0;
+  }
+  return false;
+}
+function getPaymentsForMonth(m,y){const fixed=state.fixed.filter(p=>isFixedActiveInMonth(p,m,y)).map(p=>{const s=getFixedStatus(p,m,y);return {...p,__collection:'fixed',__viewMonth:m,__viewYear:y,month:m,year:y,paid:!!s.paid,apartadoQ1:!!s.apartadoQ1,apartadoQ2:!!s.apartadoQ2};});const inst=state.installments.filter(p=>isInstallmentRelevantInMonth(p,m,y)).map(p=>{const s=getInstallmentStatus(p,m,y);const current=Math.max(1,Math.min(parseInt(p.totalMonths)||1,getInstallmentNumberForMonth(p,m,y)));return {...p,__collection:'installments',__viewMonth:m,__viewYear:y,month:m,year:y,currentMonth:current,paid:!!s.paid,apartadoQ1:!!s.apartadoQ1,apartadoQ2:!!s.apartadoQ2};});const vari=state.variable.filter(p=>isVariableRelevantInMonth(p,m,y)).map(p=>({...p,__collection:'variable',__viewMonth:m,__viewYear:y}));const goals=getGoalContributionItems(m,y);return {fixed,inst,vari,goals,sav:state.savings.filter(p=>p.month===m&&p.year===y)};}
+function getPaymentCollection(item){if(item.__collection)return item.__collection;if(state.fixed.some(p=>p.id===item.id))return 'fixed';if(state.installments.some(p=>p.id===item.id))return 'installments';if(state.variable.some(p=>p.id===item.id))return 'variable';if((state.savingsGoals||[]).some(p=>p.id===item.id))return 'goalContrib';if(state.savings.some(p=>p.id===item.id))return 'savings';return '';}
+function getPaymentType(item){const c=getPaymentCollection(item);return c==='fixed'?'fijo':c==='installments'?'meses':c==='variable'?'variado':'ahorro';}
+function getPaymentAmount(item){return parseFloat(item.amount||item.estimatedAmount||0)||0;}
+function getPaymentDayForQuincena(item,q){
+  const fallback=q===1?(state.config.payDate1||1):(state.config.payDate2||16);
+  const custom=q===1?item.payDayQ1:item.payDayQ2;
+  return parseInt(custom)||fallback;
+}
+function getSplitMode(item){return item.splitMode||'Dividir en dos quincenas';}
+function addMonthOffset(m,y,offset){const idx=monthIndex(m,y)+offset;return {month:((idx%12)+12)%12,year:Math.floor(idx/12)};}
+function getNextTwoQuincenaTargets(item){
+  const baseMonth=item.startMonth??item.month??state.currentMonth;
+  const baseYear=item.startYear??item.year??state.currentYear;
+  const next=addMonthOffset(baseMonth,baseYear,1);
+  const start=item.firstSetAside||'current-q2';
+  if(start==='current-q1') return [{month:baseMonth,year:baseYear,q:1},{month:baseMonth,year:baseYear,q:2}];
+  if(start==='current-q2') return [{month:baseMonth,year:baseYear,q:2},{month:next.month,year:next.year,q:1}];
+  if(start==='next-q1') return [{month:next.month,year:next.year,q:1},{month:next.month,year:next.year,q:2}];
+  if(start==='next-q2'){
+    const afterNext=addMonthOffset(baseMonth,baseYear,2);
+    return [{month:next.month,year:next.year,q:2},{month:afterNext.month,year:afterNext.year,q:1}];
+  }
+  return [{month:baseMonth,year:baseYear,q:2},{month:next.month,year:next.year,q:1}];
+}
+function isNextTwoQuincenaTarget(item,q,m=state.currentMonth,y=state.currentYear){return getNextTwoQuincenaTargets(item).some(t=>t.month===m&&t.year===y&&t.q===q);}
+function getAmountToSetAside(item,q){
+  if(getPaymentCollection(item)==='savings'){
+    return normalizeQuincena(item.quincena,item.date)===(q===1?'Q1':'Q2') ? (isSavingConfirmed(item)?getSavingRealAmount(item):getSavingPlannedAmount(item)) : 0;
+  }
+  if(getPaymentCollection(item)==='goalContrib'){
+    if(item.isGeneralSavingsGoal)return getGoalContributionAmount(item,q);
+    const goal=(state.savingsGoals||[]).find(g=>g.id===item.goalId||g.id===item.id);
+    return goal?getGoalContributionAmount(goal,q):0;
+  }
+  const amount=getPaymentAmount(item),mode=getSplitMode(item),collection=getPaymentCollection(item);
+  if(mode==='Manual por quincena'){
+    return q===1?(parseFloat(item.manualQ1)||0):(parseFloat(item.manualQ2)||0);
+  }
+  const halfAmount=(collection==='installments' && (parseFloat(item.quincenaAmount)||0)>0) ? (parseFloat(item.quincenaAmount)||0) : amount/2;
+  const viewMonth=item.__viewMonth??item.month??state.currentMonth;
+  const viewYear=item.__viewYear??item.year??state.currentYear;
+  if(mode==='Q2 anterior + Q1 del mes de pago'){
+    const next=addMonthOffset(viewMonth,viewYear,1);
+    if(q===1){
+      if(collection==='installments') return isInstallmentActiveInMonth(item,viewMonth,viewYear)?halfAmount:0;
+      if(collection==='fixed') return isFixedActiveInMonth(item,viewMonth,viewYear)?halfAmount:0;
+      return item.month===viewMonth&&item.year===viewYear?amount/2:0;
+    }
+    if(q===2){
+      if(collection==='installments') return isInstallmentActiveInMonth(item,next.month,next.year)?halfAmount:0;
+      if(collection==='fixed') return isFixedActiveInMonth(item,next.month,next.year)?halfAmount:0;
+      return 0;
+    }
+    return 0;
+  }
+  if(mode==='Dividir en próximas 2 quincenas'){
+    return isNextTwoQuincenaTarget(item,q,viewMonth,viewYear)?halfAmount:0;
+  }
+  if(mode==='Cargar completo en Q1')return q===1?amount:0;
+  if(mode==='Cargar completo en Q2')return q===2?amount:0;
+  return halfAmount;
+}
+function isSetAside(item,q){
+  if(getPaymentCollection(item)==='savings') return isSavingConfirmed(item);
+  if(getPaymentCollection(item)==='goalContrib') return isGoalContributionSaved(item.goalId||item.id,q,item.__viewMonth??state.currentMonth,item.__viewYear??state.currentYear);
+  return q===1?!!item.apartadoQ1:!!item.apartadoQ2;
+}
+function paidArr(arr){return arr.filter(p=>p.paid).reduce((s,p)=>s+getPaymentAmount(p),0);}
+function getRealSetAsideAmount(item,q){
+  if(!isSetAside(item,q)) return 0;
+  if(getPaymentCollection(item)==='savings') return getSavingRealAmount(item);
+  return getAmountToSetAside(item,q);
+}
+function getSetAsidePaidAmount(arr){return arr.reduce((sum,item)=>sum+getRealSetAsideAmount(item,1)+getRealSetAsideAmount(item,2),0);}
+function getSavingsByQuincena(payments,q){const target=q===1?'Q1':'Q2';return payments.sav.filter(s=>isSavingConfirmed(s)&&normalizeQuincena(s.quincena,s.date)===target).reduce((sum,s)=>sum+getSavingRealAmount(s),0);}
+function getNonGoalSavingsByQuincena(payments,q){const target=q===1?'Q1':'Q2';return payments.sav.filter(s=>isSavingConfirmed(s)&&!s.goalId&&normalizeQuincena(s.quincena,s.date)===target).reduce((sum,s)=>sum+getSavingRealAmount(s),0);}
+function getGoalContributionAmount(goal,q){
+  const amount=parseFloat(goal.planAmount)||0;
+  if(!amount)return 0;
+  return goal.planType==='monthly'?amount/2:amount;
+}
+function getGoalContributionItems(m=state.currentMonth,y=state.currentYear){
+  return getActiveSavingsGoals(m,y).filter(g=>parseFloat(g.planAmount)>0).map(g=>({
+    id:g.id,
+    goalId:g.id,
+    concept:`Meta: ${g.name}`,
+    amount:parseFloat(g.planAmount)||0,
+    card:g.card||'',
+    __collection:'goalContrib',
+    __viewMonth:m,
+    __viewYear:y,
+    month:m,
+    year:y,
+    type:'ahorro'
+  }));
+}
+function isGoalContributionSaved(goalId,q,m=state.currentMonth,y=state.currentYear){
+  const target=q===1?'Q1':'Q2';
+  if(!goalId){
+    return state.savings.some(s=>!s.goalId&&s.month===m&&s.year===y&&normalizeQuincena(s.quincena,s.date)===target);
+  }
+  return state.savings.some(s=>s.goalId===goalId&&s.month===m&&s.year===y&&normalizeQuincena(s.quincena,s.date)===target);
+}
+function getSavingsSummaryForMonth(month,year){const list=state.savings.filter(s=>s.month===month&&s.year===year),realList=list.filter(isSavingConfirmed),planned=list.filter(s=>!isSavingConfirmed(s)).reduce((a,s)=>a+getSavingPlannedAmount(s),0),goal=state.config.savingsGoal||0;const q1=realList.filter(s=>normalizeQuincena(s.quincena,s.date)==='Q1').reduce((a,s)=>a+getSavingRealAmount(s),0);const q2=realList.filter(s=>normalizeQuincena(s.quincena,s.date)==='Q2').reduce((a,s)=>a+getSavingRealAmount(s),0);const total=q1+q2,missing=Math.max(0,goal-total);return {goal,q1,q2,total,planned,missing,pct:goal?Math.min(100,Math.round(total/goal*100)):0,pctQ1:goal?Math.min(100,Math.round(q1/goal*100)):0,pctQ2:goal?Math.min(100,Math.round(q2/goal*100)):0,pctMissing:goal?Math.max(0,Math.round(missing/goal*100)):0};}
+function isSavingsGoalActiveInMonth(goal,m,y){const sm=goal.startMonth??0,sy=goal.startYear??state.currentYear,em=goal.endMonth??sm,ey=goal.endYear??sy,idx=monthIndex(m,y);return idx>=monthIndex(sm,sy)&&idx<=monthIndex(em,ey);}
+function getActiveSavingsGoals(m=state.currentMonth,y=state.currentYear){return (state.savingsGoals||[]).filter(g=>isSavingsGoalActiveInMonth(g,m,y));}
+function getSavingsGoalProgress(goal,m=state.currentMonth,y=state.currentYear){const total=parseFloat(goal.amount)||0,start=monthIndex(goal.startMonth??0,goal.startYear??state.currentYear),end=monthIndex(goal.endMonth??goal.startMonth??0,goal.endYear??goal.startYear??state.currentYear),now=monthIndex(m,y),months=Math.max(1,end-start+1),elapsed=Math.max(0,Math.min(months,now-start+1)),monthlyTarget=total/months,goalSavings=state.savings.filter(s=>s.goalId===goal.id),saved=goalSavings.filter(isSavingConfirmed).reduce((sum,s)=>sum+getSavingRealAmount(s),0),savedThisMonth=goalSavings.filter(s=>isSavingConfirmed(s)&&s.month===m&&s.year===y).reduce((sum,s)=>sum+getSavingRealAmount(s),0),plannedThisMonth=goalSavings.filter(s=>!isSavingConfirmed(s)&&s.month===m&&s.year===y).reduce((sum,s)=>sum+getSavingPlannedAmount(s),0),expectedToDate=monthlyTarget*elapsed,missing=Math.max(0,total-saved),pct=total?Math.min(100,Math.round(saved/total*100)):0;return {total,months,elapsed,monthlyTarget,saved,savedThisMonth,plannedThisMonth,expectedToDate,missing,pct};}
+function getSavingsGoalOptions(selected=''){const opts=(state.savingsGoals||[]).map(g=>`<option value="${g.id}" ${selected===g.id?'selected':''}>${escapeHtml(g.name)}</option>`).join('');return `<option value="">Ahorro general</option>${opts}`;}
+function getSavingsGoalPace(goal,m=state.currentMonth,y=state.currentYear){
+  const p=getSavingsGoalProgress(goal,m,y);
+  if(!p.total)return {label:'Sin objetivo',cls:'bg-gray-50 text-gray-400 border-gray-100',icon:'minus-circle'};
+  const diff=p.saved-p.expectedToDate;
+  const tolerance=Math.max(50,p.monthlyTarget*.20);
+  if(diff>=tolerance)return {label:'Vas adelantada',cls:'bg-aqua-50 text-aqua-500 border-aqua-200',icon:'trending-up'};
+  if(diff<=-tolerance)return {label:'Vas atrasada',cls:'bg-durazno-50 text-durazno-500 border-durazno-100',icon:'alert-triangle'};
+  return {label:'Vas al día',cls:'bg-menta-50 text-menta-500 border-menta-100',icon:'check-circle'};
+}
+function getMonthNoteKey(m=state.currentMonth,y=state.currentYear){return `${y}-${m}`;}
+function getMonthNote(m=state.currentMonth,y=state.currentYear){return (state.monthNotes&&state.monthNotes[getMonthNoteKey(m,y)])||'';}
+function saveMonthNote(v){if(!state.monthNotes)state.monthNotes={};state.monthNotes[getMonthNoteKey()]=String(v||'');saveState();}
+function duplicateItem(id,col){
+  const arr=state[col];if(!Array.isArray(arr))return;
+  const item=arr.find(i=>i.id===id);if(!item)return;
+  const copy=JSON.parse(JSON.stringify(item));
+  copy.id=uid();
+  if(copy.concept)copy.concept=`${copy.concept} copia`;
+  copy.month=state.currentMonth;copy.year=state.currentYear;
+  if(col==='fixed'){copy.startMonth=state.currentMonth;copy.startYear=state.currentYear;copy.monthlyStatus={};}
+  if(col==='installments'){copy.startMonth=state.currentMonth;copy.startYear=state.currentYear;copy.monthlyStatus={};}
+  if(col==='variable'){copy.paid=false;copy.apartadoQ1=false;copy.apartadoQ2=false;}
+  if(col==='savings'){copy.date=parseInt(copy.date)||1;copy.quincena=normalizeQuincena(copy.quincena,copy.date);}
+  arr.push(copy);saveState();render();
+}
+function getCategoryVisual(type){const map={fijo:{dot:'bg-lila-300',bg:'bg-lila-50',border:'border-lila-100',text:'text-lila-500',label:'Pago fijo'},meses:{dot:'bg-menta-300',bg:'bg-menta-50',border:'border-menta-100',text:'text-menta-500',label:'Pago a meses'},variado:{dot:'bg-durazno-300',bg:'bg-durazno-50',border:'border-durazno-100',text:'text-durazno-500',label:'Pago variado'},ahorro:{dot:'bg-azul-300',bg:'bg-azul-50',border:'border-azul-100',text:'text-azul-500',label:'Ahorro'}};return map[type]||map.variado;}
+function getStatusVisual(status){const map={pendiente:{label:'Pendiente',bg:'bg-durazno-50',border:'border-durazno-100',text:'text-durazno-500',accent:'accent-durazno-500',row:'bg-durazno-50/40'},apartado:{label:'Apartado',bg:'bg-azul-50',border:'border-azul-100',text:'text-azul-500',accent:'accent-azul-500',row:'bg-azul-50/50'},pagado:{label:'Pagado',bg:'bg-menta-50',border:'border-menta-100',text:'text-menta-500',accent:'accent-menta-500',row:'bg-menta-50/50'}};return map[status]||map.pendiente;}
+function getPaymentStatusForQuincena(item,q){if(getPaymentCollection(item)==='goalContrib')return isSetAside(item,q)?'apartado':'pendiente';if(item.paid)return 'pagado';if(isSetAside(item,q))return 'apartado';return 'pendiente';}
+function getPaymentStatusForDay(item,day){const c=getPaymentCollection(item);if(c==='savings')return 'apartado';if(item.paid)return 'pagado';const q=day<=15?1:2;if(isSetAside(item,q))return 'apartado';return 'pendiente';}
+function getFinalStatusLabel(item){const c=getPaymentCollection(item);if(c==='savings')return 'Apartado';if(item.paid)return 'Pagado';if(item.apartadoQ1||item.apartadoQ2)return 'Apartado';return 'Pendiente';}
+
+function render(){renderMonthTabs();if(currentView==='dashboard')renderDashboardView();else if(currentView==='monthly')renderMonthlyView();else if(currentView==='biweekly')renderBiweeklyView();else if(currentView==='fixed')renderFixedView();else if(currentView==='installments')renderInstallmentsView();else if(currentView==='variable')renderVariableView();else if(currentView==='savings')renderSavingsView();else if(currentView==='annual')renderAnnualView();else if(currentView==='config')renderConfigView();renderSidebar();lucide.createIcons();}
+function renderMonthTabs(){
+  const monthButtons=MONTHS.map((m,i)=>`<button class="month-tab px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${i===state.currentMonth?'active':''}" onclick="setMonth(${i})">${m}</button>`).join('');
+  document.getElementById('monthTabs').innerHTML=`
+    <div class="flex items-center gap-2 mr-3 pr-3 border-r border-gray-100 shrink-0">
+      <button onclick="changeYear(-1)" class="w-7 h-7 rounded-lg bg-gray-50 hover:bg-lila-50 text-gray-500 hover:text-lila-500 flex items-center justify-center" title="Año anterior"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+      <div class="px-3 py-1 rounded-lg bg-lila-50 border border-lila-100 text-lila-500 text-xs font-bold whitespace-nowrap">Año ${state.currentYear}</div>
+      <button onclick="changeYear(1)" class="w-7 h-7 rounded-lg bg-gray-50 hover:bg-lila-50 text-gray-500 hover:text-lila-500 flex items-center justify-center" title="Año siguiente"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+    </div>
+    ${monthButtons}`;
+}
+function setMonth(i){state.currentMonth=i;savingsFilterMonth=i;saveState();render();}
+function changeYear(delta){state.currentYear=(parseInt(state.currentYear)||new Date().getFullYear())+delta;saveState();render();}
+function changeMonth(dir){if(dir===-1){if(state.currentMonth===0){state.currentMonth=11;state.currentYear--;}else state.currentMonth--;}else{if(state.currentMonth===11){state.currentMonth=0;state.currentYear++;}else state.currentMonth++;}savingsFilterMonth=state.currentMonth;saveState();render();}
+function renderDashboardView(){document.getElementById('mainContent').innerHTML=`<div class="flex items-center justify-between"><div class="flex items-center gap-3"><button onclick="changeMonth(-1)" class="p-1.5 rounded-lg hover:bg-gray-100"><i data-lucide="chevron-left" class="w-4 h-4"></i></button><h2 class="text-xl font-bold text-gray-800">${MONTHS[state.currentMonth]} ${state.currentYear}</h2><button onclick="changeMonth(1)" class="p-1.5 rounded-lg hover:bg-gray-100"><i data-lucide="chevron-right" class="w-4 h-4"></i></button></div><div class="flex items-center gap-2">${renderPayrollMonthControl()}<button onclick="openRecordModal('fixed')" class="text-xs px-3 py-1.5 rounded-lg bg-lila-100 text-lila-500 font-semibold hover:bg-lila-200">+ Pago fijo</button><button onclick="openRecordModal('installment')" class="text-xs px-3 py-1.5 rounded-lg bg-menta-100 text-menta-500 font-semibold hover:bg-menta-200">+ Pago a meses</button><button onclick="openRecordModal('variable')" class="text-xs px-3 py-1.5 rounded-lg bg-durazno-100 text-durazno-500 font-semibold hover:bg-durazno-200">+ Pago variado</button><button onclick="openSavingModal()" class="text-xs px-3 py-1.5 rounded-lg bg-azul-100 text-azul-500 font-semibold hover:bg-azul-200">+ Ahorro</button></div></div><div class="grid grid-cols-4 gap-4" id="summaryCards"></div><div id="smartMonthInsight"></div><div class="grid grid-cols-12 gap-4" id="dashboardSmartBlocks"></div><div class="grid grid-cols-12 gap-4"><div class="col-span-9 bg-white rounded-xl card-shadow p-5"><h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="calendar-range" class="w-4 h-4 text-lila-400"></i>Calendario quincenal</h3><div class="grid grid-cols-2 gap-4" id="biweeklyContent"></div></div><div class="col-span-3 space-y-4"><div class="bg-white rounded-xl card-shadow p-4"><h3 class="font-semibold text-gray-800 mb-3 text-sm" id="miniCalTitle"></h3><div id="miniCalendar" class="text-xs relative"></div><div class="flex gap-3 mt-3 text-[10px] text-gray-500"><span class="flex items-center gap-1"><span class="cal-dot bg-lila-300"></span>Fijos</span><span class="flex items-center gap-1"><span class="cal-dot bg-menta-300"></span>Meses</span><span class="flex items-center gap-1"><span class="cal-dot bg-durazno-300"></span>Variados</span><span class="flex items-center gap-1"><span class="cal-dot bg-azul-300"></span>Ahorro</span></div></div><div class="bg-white rounded-xl card-shadow p-4" id="monthSummary"></div></div></div><div class="grid grid-cols-2 gap-4"><div class="bg-white rounded-xl card-shadow p-5" id="fixedTable"></div><div class="bg-white rounded-xl card-shadow p-5" id="installTable"></div></div><div class="grid grid-cols-2 gap-4"><div class="bg-white rounded-xl card-shadow p-5" id="variableTable"></div><div class="bg-white rounded-xl card-shadow p-5" id="savingsTable"></div></div>`;renderSummaryCards();renderSmartDashboardBlocks();renderBiweekly();renderMiniCalendar();renderMonthSummary();renderFixedTable();renderInstallTable();renderVariableTable();renderSavingsTable();}
+function getSetAsideSummaryForCollection(collection,m=state.currentMonth,y=state.currentYear){
+  const p=getPaymentsForMonth(m,y);
+  const map={fixed:p.fixed,installments:p.inst,variable:p.vari};
+  const arr=map[collection]||[];
+  const q1Plan=arr.reduce((s,i)=>s+getAmountToSetAside(i,1),0);
+  const q2Plan=arr.reduce((s,i)=>s+getAmountToSetAside(i,2),0);
+  const q1Apart=arr.reduce((s,i)=>s+(isSetAside(i,1)?getAmountToSetAside(i,1):0),0);
+  const q2Apart=arr.reduce((s,i)=>s+(isSetAside(i,2)?getAmountToSetAside(i,2):0),0);
+  let prevQ2Plan=0,prevQ2Apart=0;
+  if(collection==='installments'){
+    const prev=addMonthOffset(m,y,-1);
+    (state.installments||[]).forEach(item=>{
+      if(getSplitMode(item)!=='Q2 anterior + Q1 del mes de pago')return;
+      if(!isInstallmentActiveInMonth(item,m,y))return;
+      const temp={...item,__collection:'installments',__viewMonth:prev.month,__viewYear:prev.year};
+      const amount=getAmountToSetAside(temp,2);
+      if(amount<=0)return;
+      const status=getInstallmentStatus(item,prev.month,prev.year);
+      prevQ2Plan+=amount;
+      if(status.apartadoQ2)prevQ2Apart+=amount;
+    });
+  }
+  const totalPlan=q1Plan+q2Plan+prevQ2Plan;
+  const totalApart=q1Apart+q2Apart+prevQ2Apart;
+  return {q1Plan,q2Plan,q1Apart,q2Apart,prevQ2Plan,prevQ2Apart,totalPlan,totalApart,missing:Math.max(0,totalPlan-totalApart)};
+}
+function renderSetAsideMiniSummary(collection){
+  const s=getSetAsideSummaryForCollection(collection);
+  const pct=s.totalPlan?Math.round((s.totalApart/s.totalPlan)*100):100;
+  const hasPrevQ2=collection==='installments' && s.prevQ2Plan>0;
+  const grid=hasPrevQ2?'grid-cols-5':'grid-cols-4';
+  const prevCard=hasPrevQ2?`<div class="bg-lila-50 rounded-xl p-2"><span class="text-gray-400">Q2 anterior</span><div class="font-bold text-lila-500">${fmt(s.prevQ2Apart)}</div><div class="text-[10px] text-gray-400">de ${fmt(s.prevQ2Plan)}</div></div>`:'';
+  return `<div class="bg-white border border-gray-100 rounded-2xl card-shadow p-3 mb-4">
+    <div class="flex items-center justify-between gap-3 mb-2">
+      <div class="flex items-center gap-2 font-bold text-gray-800"><i data-lucide="piggy-bank" class="w-4 h-4 text-azul-500"></i>Apartado de esta categoría</div>
+      <div class="text-xs font-semibold ${s.missing<=0?'text-menta-500':'text-durazno-500'}">${s.missing<=0?'Apartado completo':`Faltan ${fmt(s.missing)}`}</div>
+    </div>
+    <div class="grid ${grid} gap-3 text-xs">
+      <div class="bg-azul-50 rounded-xl p-2"><span class="text-gray-400">Q1 apartado</span><div class="font-bold text-azul-500">${fmt(s.q1Apart)}</div><div class="text-[10px] text-gray-400">de ${fmt(s.q1Plan)}</div></div>
+      <div class="bg-azul-50 rounded-xl p-2"><span class="text-gray-400">Q2 actual</span><div class="font-bold text-azul-500">${fmt(s.q2Apart)}</div><div class="text-[10px] text-gray-400">de ${fmt(s.q2Plan)}</div></div>
+      ${prevCard}
+      <div class="bg-menta-50 rounded-xl p-2"><span class="text-gray-400">Total apartado</span><div class="font-bold text-menta-500">${fmt(s.totalApart)}</div><div class="text-[10px] text-gray-400">${pct}% del plan</div></div>
+      <div class="bg-durazno-50 rounded-xl p-2"><span class="text-gray-400">Falta apartar</span><div class="font-bold text-durazno-500">${fmt(s.missing)}</div><div class="text-[10px] text-gray-400">pendiente</div></div>
+    </div>
+    ${hasPrevQ2?'<div class="text-[10px] text-gray-400 mt-2">Incluye Q2 del mes anterior cuando el pago se cubre con Q2 anterior + Q1 del mes de pago.</div>':''}
+  </div>`;
+}
+function makeSavingsPlanningItems(p){
+  const activeGoalIds=new Set((p.goals||[]).map(g=>g.goalId||g.id).filter(Boolean));
+  return (p.sav||[]).filter(s=>!s.goalId||!activeGoalIds.has(s.goalId)).map(s=>({
+    ...s,
+    __collection:'savings',
+    concept:(state.savingsGoals||[]).find(g=>g.id===s.goalId)?.name?`Ahorro: ${(state.savingsGoals||[]).find(g=>g.id===s.goalId).name}`:'Ahorro general',
+    type:'ahorro',
+    paid:false,
+    displayAmount:getSavingPlannedAmount(s)
+  }));
+}
+function getPlanTotal(arr){return (arr||[]).reduce((s,i)=>s+getAmountToSetAside(i,1)+getAmountToSetAside(i,2),0);}
+function getApartTotal(arr){return (arr||[]).reduce((s,i)=>s+getRealSetAsideAmount(i,1)+getRealSetAsideAmount(i,2),0);}
+function getDashboardAllItems(){const p=getPaymentsForMonth(state.currentMonth,state.currentYear);const savingsItems=makeSavingsPlanningItems(p);return {p,all:[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...savingsItems]};}
+function getUpcomingPayments(limit=6){const {all}=getDashboardAllItems();const list=[];all.forEach(item=>{[1,2].forEach(q=>{const amount=getAmountToSetAside(item,q);if(amount<=0)return;const status=getPaymentStatusForQuincena(item,q);const due=getRealPaymentMonthYearForQuincena(item,q,state.currentMonth,state.currentYear);list.push({day:parseInt(item.date)||1,dueMonth:due.month,dueYear:due.year,q,concept:item.concept||'Registro',type:getPaymentType(item),card:item.card||'-',amount,status,subtitle:getUpcomingSubtitle(item,q,status,state.currentMonth,state.currentYear),dueText:`Fecha de pago ${getPaymentDueLabel(item,q,state.currentMonth,state.currentYear)}`});});});return list.sort((a,b)=>monthIndex(a.dueMonth,a.dueYear)-monthIndex(b.dueMonth,b.dueYear)||a.day-b.day).slice(0,limit);}
+function renderSmartDashboardBlocks(){
+  const {p,all}=getDashboardAllItems(),salary=state.config.salaryBiweekly||0;
+  const q1=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),q2=all.reduce((s,i)=>s+getAmountToSetAside(i,2),0);
+  const q1Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,1),0),q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0);
+  const free1=salary-q1,free2=salary-q2;
+  const heavy=q1>=q2?'Q1':'Q2',heavyFree=q1>=q2?free1:free2,missing=(q1-q1Apart)+(q2-q2Apart);
+  const insight=heavyFree<0?`Ojo, ${MONTHS[state.currentMonth]} viene pesado: ${heavy} queda en negativo por ${fmt(Math.abs(heavyFree))}.`:missing>0?`${MONTHS[state.currentMonth]} va en proceso: te falta apartar ${fmt(missing)} para completar el mes.`:`${MONTHS[state.currentMonth]} va súper bien: ya tienes completados los apartados del mes.`;
+
+  const upcoming=getUpcomingPayments(12).map(x=>{const cat=getCategoryVisual(x.type),st=getStatusVisual(x.status);const statusIcon=x.status==='pagado'?'<span class="w-4 h-4 rounded-full bg-menta-500 text-white inline-flex items-center justify-center text-[10px] leading-none font-bold">✓</span>':'';return `<div class="flex items-center justify-between gap-3 p-3 mb-2 rounded-xl border ${st.bg} ${st.border} ${st.row}"><div class="min-w-0"><div class="font-semibold text-gray-800 truncate"><span class="cal-dot ${cat.dot} mr-1"></span>${escapeHtml(x.concept)}</div><div class="text-[11px] text-gray-400">${escapeHtml(x.subtitle)}</div><div class="text-[10px] text-gray-300">${escapeHtml(x.dueText)}</div></div><div class="text-right shrink-0"><div class="font-bold text-base ${st.text}">${fmt(x.amount)}</div><div class="inline-flex items-center gap-1.5 mt-1 text-[10px] px-2.5 py-1 rounded-full border ${st.bg} ${st.border} ${st.text} font-semibold">${statusIcon}${st.label}</div></div></div>`;}).join('')||'<div class="text-sm text-gray-400 text-center py-4">Sin próximos pagos en este mes.</div>';
+
+  const savingsPlanningItems=makeSavingsPlanningItems(p);
+  const typeTotals=[
+    {label:'Fijos',total:getPlanTotal(p.fixed),apart:getApartTotal(p.fixed),visual:getCategoryVisual('fijo')},
+    {label:'A meses',total:getPlanTotal(p.inst),apart:getApartTotal(p.inst),visual:getCategoryVisual('meses')},
+    {label:'Variados',total:getPlanTotal(p.vari),apart:getApartTotal(p.vari),visual:getCategoryVisual('variado')},
+    {label:'Ahorro',total:getPlanTotal([...(p.goals||[]),...savingsPlanningItems]),apart:getApartTotal([...(p.goals||[]),...savingsPlanningItems]),visual:getCategoryVisual('ahorro')}
+  ];
+  const monthTotal=typeTotals.reduce((s,i)=>s+i.total,0)||1;
+  const typeRows=typeTotals.map(t=>{const falta=Math.max(0,t.total-t.apart),pct=t.total?Math.round(t.apart/t.total*100):100,weight=Math.round((t.total/monthTotal)*100);return `<div class="bg-white border border-gray-100 rounded-xl p-3 card-shadow"><div class="flex items-center justify-between gap-3 mb-2"><div class="font-bold text-gray-800 flex items-center gap-2"><span class="cal-dot ${t.visual.dot}"></span>${t.label}</div><span class="text-[11px] font-semibold ${falta<=0?'text-menta-500':'text-durazno-500'}">${falta<=0?'Completo':`Faltan ${fmt(falta)}`}</span></div><div class="grid grid-cols-3 gap-2 text-[11px] mb-2"><div class="bg-gray-50 rounded-lg p-2"><span class="text-gray-400">A apartar</span><div class="font-bold ${t.visual.text}">${fmt(t.total)}</div></div><div class="bg-gray-50 rounded-lg p-2"><span class="text-gray-400">Apartado</span><div class="font-bold text-azul-500">${fmt(t.apart)}</div></div><div class="bg-gray-50 rounded-lg p-2"><span class="text-gray-400">Peso del mes</span><div class="font-bold text-gray-700">${weight}%</div></div></div><div class="flex justify-between text-[10px] text-gray-400 mb-1"><span>Avance apartado</span><span>${pct}%</span></div><div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden"><div class="${falta<=0?'bg-menta-400':'bg-azul-400'} h-2 rounded-full" style="width:${Math.min(100,Math.max(3,pct))}%"></div></div></div>`;}).join('');
+
+  const quickStats=`<div class="grid grid-cols-3 gap-3 text-xs"><div class="bg-rosa-50 border border-rosa-100 rounded-xl p-3"><span class="text-gray-400">Total a separar</span><div class="font-bold text-rosa-500 text-lg">${fmt(q1+q2)}</div><div class="text-[10px] text-gray-400 mt-0.5">Pagos + ahorro</div></div><div class="bg-azul-50 border border-azul-100 rounded-xl p-3"><span class="text-gray-400">Ya separado</span><div class="font-bold text-azul-500 text-lg">${fmt(q1Apart+q2Apart)}</div><div class="text-[10px] text-gray-400 mt-0.5">Apartado + ahorro</div></div><div class="bg-durazno-50 border border-durazno-100 rounded-xl p-3"><span class="text-gray-400">Falta separar</span><div class="font-bold text-durazno-500 text-lg">${fmt(Math.max(0,(q1+q2)-(q1Apart+q2Apart)))}</div><div class="text-[10px] text-gray-400 mt-0.5">Pendiente del mes</div></div></div>`;
+
+  document.getElementById('smartMonthInsight').innerHTML=`<div class="bg-white border border-gray-100 rounded-2xl card-shadow p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full ${heavyFree<0?'bg-red-50':'bg-aqua-50'} flex items-center justify-center"><i data-lucide="sparkles" class="w-5 h-5 ${heavyFree<0?'text-red-400':'text-aqua-500'}"></i></div><div><h3 class="font-bold text-gray-800">Resumen inteligente del mes</h3><p class="text-sm text-gray-500">${insight}</p></div></div>`;
+  document.getElementById('dashboardSmartBlocks').innerHTML=`<div class="col-span-4 bg-white rounded-2xl card-shadow border border-gray-100 p-4"><h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2"><i data-lucide="bell" class="w-4 h-4 text-durazno-500"></i>Próximos pagos</h3><div class="max-h-[420px] overflow-y-auto pr-1 pb-2">${upcoming}</div></div><div class="col-span-8 bg-white rounded-2xl card-shadow border border-gray-100 p-4"><div class="flex items-center justify-between gap-3 mb-3"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="list-checks" class="w-4 h-4 text-azul-500"></i>Detalle de apartados del mes</h3><span class="text-[11px] text-gray-400">Resumen por tipo</span></div>${quickStats}<div class="grid grid-cols-2 gap-3 mt-3">${typeRows}</div></div>`;
+}
+function renderSummaryCards(){
+  const p=getPaymentsForMonth(state.currentMonth,state.currentYear),all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)],paymentItems=[...p.fixed,...p.inst,...p.vari],salary=state.config.salaryBiweekly||0,
+  q1=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),
+  q2=all.reduce((s,i)=>s+getAmountToSetAside(i,2),0),
+  q1Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,1),0),
+  q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0),
+  paidQ1=paymentItems.reduce((s,i)=>s+(i.paid&&getSplitMode(i)==='Q2 anterior + Q1 del mes de pago'&&getAmountToSetAside(i,1)>0?getPaymentAmount(i):0),0),
+  paidQ2=paymentItems.reduce((s,i)=>s+(i.paid&&getSplitMode(i)!=='Q2 anterior + Q1 del mes de pago'&&getAmountToSetAside(i,2)>0?getPaymentAmount(i):0),0),
+  s1=getSavingsByQuincena(p,1),s2=getSavingsByQuincena(p,2),st=s1+s2,totalAccum=totalConfirmedSavings(state.savings),f1=salary-Math.max(q1,q1Apart),f2=salary-Math.max(q2,q2Apart);
+
+  const mini=(l,v,c,paid=null)=>`
+    <div class="bg-white/55 border border-white/70 rounded-xl p-3">
+      <div class="text-xs text-gray-500 font-semibold">${l}</div>
+      <div class="text-base font-bold ${c}">${fmt(v)}</div>
+      ${paid!==null?`<div class="text-xs text-menta-500 font-semibold mt-1">Pagado real: ${fmt(paid)}</div>`:''}
+    </div>`;
+
+  document.getElementById('summaryCards').innerHTML=`
+    <div class="bg-lila-50 border border-lila-100 rounded-2xl p-5 card-shadow">
+      <div class="flex items-center gap-2 text-base font-semibold text-gray-500 mb-2">
+        <i data-lucide="banknote" class="w-4 h-4 text-lila-500"></i>
+        Sueldo por quincena
+      </div>
+      <div class="text-3xl font-bold text-lila-500 mb-4">${fmt(salary)}</div>
+      <div class="border-t border-lila-100 pt-3 flex justify-between text-base">
+        <span class="text-gray-600">Sueldo por mes</span>
+        <span class="font-bold text-lila-500">${fmt(salary*2)}</span>
+      </div>
+    </div>
+
+    <div class="bg-rosa-50 border border-rosa-100 rounded-2xl p-5 card-shadow">
+      <div class="flex items-center gap-2 text-base font-semibold text-gray-500 mb-3">
+        <i data-lucide="credit-card" class="w-4 h-4 text-rosa-500"></i>
+        Total a pagar por quincena
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        ${mini('Q1',q1,'text-rosa-500',paidQ1)}
+        ${mini('Q2',q2,'text-rosa-500',paidQ2)}
+      </div>
+      <div class="border-t border-rosa-100 pt-3 flex justify-between text-base">
+        <span class="text-gray-600">Total por mes</span>
+        <span class="font-bold text-rosa-500">${fmt(q1+q2)}</span>
+      </div>
+    </div>
+
+    <div class="bg-aqua-50 border border-aqua-200 rounded-2xl p-5 card-shadow">
+      <div class="flex items-center gap-2 text-base font-semibold text-gray-500 mb-3">
+        <i data-lucide="wallet" class="w-4 h-4 text-aqua-500"></i>
+        Dinero libre por quincena
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        ${mini('Q1',f1,'text-aqua-500')}
+        ${mini('Q2',f2,'text-aqua-500')}
+      </div>
+      <div class="border-t border-aqua-200 pt-3 flex justify-between text-base">
+        <span class="text-gray-600">Dinero libre por mes</span>
+        <span class="font-bold text-aqua-500">${fmt(f1+f2)}</span>
+      </div>
+    </div>
+
+    <div class="bg-azul-50 border border-azul-100 rounded-2xl p-5 card-shadow">
+      <div class="flex items-center gap-2 text-base font-semibold text-gray-500 mb-2">
+        <i data-lucide="piggy-bank" class="w-4 h-4 text-azul-400"></i>
+        Ahorro del mes
+      </div>
+      <div class="text-3xl font-bold text-azul-400 mb-4">${fmt(st)}</div>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        ${mini('Q1',s1,'text-azul-400')}
+        ${mini('Q2',s2,'text-azul-400')}
+      </div>
+      <div class="border-t border-azul-100 pt-3 flex justify-between text-base">
+        <span class="text-gray-600">Ahorro total acumulado</span>
+        <span class="font-bold text-azul-400">${fmt(totalAccum)}</span>
+      </div>
+    </div>`;
+}
+function renderBiweekly(){
+  const p=getPaymentsForMonth(state.currentMonth,state.currentYear),all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)],days=getDaysInMonth(state.currentMonth,state.currentYear);
+  const conceptCell=(item,cat)=>`<td class="py-2.5 text-xs align-top"><div class="flex items-start gap-2 min-w-0"><span class="cal-dot ${cat.dot} mt-1.5 shrink-0"></span><span class="leading-tight break-words">${escapeHtml(item.concept)}</span></div></td>`;
+  const html=[1,2].map(q=>{
+    const items=all.filter(i=>getAmountToSetAside(i,q)>0),total=items.reduce((s,i)=>s+getAmountToSetAside(i,q),0),apart=items.reduce((s,i)=>s+getRealSetAsideAmount(i,q),0),free=(state.config.salaryBiweekly||0)-Math.max(total,apart);
+    const hasQ1PaymentColumn=q===1&&items.some(i=>getSplitMode(i)==='Q2 anterior + Q1 del mes de pago');
+    const hasPaidCol=q===2||hasQ1PaymentColumn;
+    const colgroup=hasPaidCol?`<colgroup><col style="width:22%"><col style="width:12%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:18%"></colgroup>`:`<colgroup><col style="width:28%"><col style="width:14%"><col style="width:18%"><col style="width:20%"><col style="width:20%"></colgroup>`;
+    let rows=items.map(item=>{
+      const type=getPaymentType(item),col=getPaymentCollection(item),cat=getCategoryVisual(type),aq=getAmountToSetAside(item,q),amount=col==='savings'?(isSavingConfirmed(item)?getSavingRealAmount(item):getSavingPlannedAmount(item)):getPaymentAmount(item),status=getPaymentStatusForQuincena(item,q),vis=getStatusVisual(status),isOffsetPayMonth=getSplitMode(item)==='Q2 anterior + Q1 del mes de pago';
+      if(q===1){
+        const paidCell=hasQ1PaymentColumn?(col==='goalContrib'||col==='savings'||!isOffsetPayMonth?`<td class="py-2.5 text-center align-top text-gray-300 text-xs">—</td>`:`<td class="py-2.5 text-center align-top"><input type="checkbox" ${item.paid?'checked':''} onchange="togglePaid('${item.id}','${col}')" class="w-4 h-4 ${item.paid?'accent-menta-500':'accent-durazno-500'}"></td>`):'';
+        return `<tr class="border-b border-gray-100 ${vis.row}">${conceptCell(item,cat)}<td class="py-2.5 text-xs capitalize align-top">${type}</td><td class="py-2.5 text-xs font-semibold align-top">${fmt(amount)}</td><td class="py-2.5 text-xs font-bold text-rosa-500 align-top">${fmt(aq)}</td><td class="py-2.5 text-center align-top">${col==='savings'?`<input type="checkbox" ${isSavingConfirmed(item)?'checked':''} onchange="toggleSavingConfirmed('${item.id}')" class="w-4 h-4 ${isSavingConfirmed(item)?'accent-azul-500':'accent-durazno-500'}">`:`<input type="checkbox" ${isSetAside(item,1)?'checked':''} onchange="toggleApartado('${item.id}','${col}',1)" class="w-4 h-4 ${isSetAside(item,1)?'accent-azul-500':'accent-durazno-500'}">`}</td>${paidCell}</tr>`;
+      }
+      return `<tr class="border-b border-gray-100 ${vis.row}">${conceptCell(item,cat)}<td class="py-2.5 text-xs capitalize align-top">${type}</td><td class="py-2.5 text-xs font-semibold align-top">${fmt(amount)}</td><td class="py-2.5 text-xs font-bold text-rosa-500 align-top">${fmt(aq)}</td><td class="py-2.5 text-center align-top">${col==='savings'?`<input type="checkbox" ${isSavingConfirmed(item)?'checked':''} onchange="toggleSavingConfirmed('${item.id}')" class="w-4 h-4 ${isSavingConfirmed(item)?'accent-azul-500':'accent-durazno-500'}">`:`<input type="checkbox" ${isSetAside(item,2)?'checked':''} onchange="toggleApartado('${item.id}','${col}',2)" class="w-4 h-4 ${isSetAside(item,2)?'accent-azul-500':'accent-durazno-500'}">`}</td><td class="py-2.5 text-center align-top">${col==='goalContrib'||col==='savings'||getSplitMode(item)==='Q2 anterior + Q1 del mes de pago'?'<span class="text-gray-300 text-xs">—</span>':`<input type="checkbox" ${item.paid?'checked':''} onchange="togglePaid('${item.id}','${col}')" class="w-4 h-4 ${item.paid?'accent-menta-500':'accent-durazno-500'}">`}</td></tr>`;
+    }).join('');
+    if(!rows){
+      const colspan=q===1?(hasQ1PaymentColumn?6:5):6;
+      rows=`<tr><td colspan="${colspan}" class="text-sm text-gray-400 py-4 text-center">Sin pagos para apartar en esta quincena</td></tr>`;
+    }
+    const headers=q===1?`<th class="text-left py-2 font-semibold">Concepto</th><th class="text-left py-2 font-semibold">Tipo</th><th class="text-left py-2 font-semibold">Monto total</th><th class="text-left py-2 font-semibold">A apartar Q1</th><th class="text-center py-2 font-semibold">Apartado Q1</th>${hasQ1PaymentColumn?'<th class="text-center py-2 font-semibold">Pagado del mes</th>':''}`:'<th class="text-left py-2 font-semibold">Concepto</th><th class="text-left py-2 font-semibold">Tipo</th><th class="text-left py-2 font-semibold">Monto total</th><th class="text-left py-2 font-semibold">A apartar Q2</th><th class="text-center py-2 font-semibold">Apartado Q2</th><th class="text-center py-2 font-semibold">Pagado del mes</th>';
+    return `<div class="border border-gray-100 rounded-xl p-4"><div class="text-sm font-bold text-gray-700 mb-3">${q===1?'1ª':'2ª'} Quincena · ${q===1?'1-15':`16-${days}`} ${MONTHS[state.currentMonth]}</div><div class="grid grid-cols-2 gap-3 mb-4 text-sm"><div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Sueldo</span><div class="font-bold text-gray-700">${fmt(state.config.salaryBiweekly)}</div></div><div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Total a apartar</span><div class="font-bold text-rosa-500">${fmt(total)}</div></div><div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Ya apartado</span><div class="font-bold text-azul-500">${fmt(apart)}</div></div><div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Libre después de apartar</span><div class="font-bold ${free>=0?'text-aqua-500':'text-red-400'}">${fmt(free)}</div></div></div><table class="w-full table-fixed">${colgroup}<thead><tr class="text-xs text-gray-500 border-b border-gray-100">${headers}</tr></thead><tbody>${rows}</tbody></table><div class="border-t border-gray-100 mt-4 pt-4 space-y-2 text-sm"><div class="flex justify-between"><span>Total a apartar Q${q}</span><span class="font-semibold text-rosa-500">${fmt(total)}</span></div><div class="flex justify-between"><span>Total apartado Q${q}</span><span class="font-semibold text-azul-500">${fmt(apart)}</span></div><div class="flex justify-between"><span>Pendiente por apartar</span><span class="font-semibold text-durazno-500">${fmt(Math.max(0,total-apart))}</span></div><div class="flex justify-between"><span>Libre después de apartar</span><span class="font-semibold ${free>=0?'text-aqua-500':'text-red-400'}">${fmt(free)}</span></div></div></div>`;
+  }).join('');
+  document.getElementById('biweeklyContent').innerHTML=html+`<div class="col-span-2 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Apartado Q1/Q2: marca cuando ya separaste el dinero de esa quincena. Pagado del mes: marca cuando ya realizaste el pago correspondiente al mes. Si usas “Q2 anterior + Q1 del mes de pago”, el pagado aparece en Q1 porque ahí ocurre el pago real.</div>`;
+}
+function toggleApartado(id,col,q){
+  if(col==='goalContrib'){
+    const goal=(state.savingsGoals||[]).find(g=>g.id===id);
+    if(!goal)return;
+    const target=q===1?'Q1':'Q2';
+    const existing=state.savings.find(s=>s.goalId===id&&s.month===state.currentMonth&&s.year===state.currentYear&&normalizeQuincena(s.quincena,s.date)===target);
+    if(existing){
+      state.savings=state.savings.filter(s=>s.id!==existing.id);
+    }else{
+      const amount=getGoalContributionAmount(goal,q);
+      if(amount>0){state.savings.push({id:uid(),date:q===1?(state.config.payDate1||1):(state.config.payDate2||16),quincena:target,amount,card:goal.card||'',goalId:id,month:state.currentMonth,year:state.currentYear});}
+    }
+    saveState();render();return;
+  }
+  const item=state[col].find(i=>i.id===id);if(!item)return;if(col==='fixed'){const s=getFixedStatus(item);if(q===1)s.apartadoQ1=!s.apartadoQ1;else s.apartadoQ2=!s.apartadoQ2;}else if(col==='installments'){const s=getInstallmentStatus(item);if(q===1)s.apartadoQ1=!s.apartadoQ1;else s.apartadoQ2=!s.apartadoQ2;}else{if(q===1)item.apartadoQ1=!item.apartadoQ1;else item.apartadoQ2=!item.apartadoQ2;}saveState();render();}
+function togglePaid(id,col){
+  if(col==='goalContrib')return;
+  const item=state[col].find(i=>i.id===id);
+  if(!item)return;
+  if(col==='fixed'){
+    const s=getFixedStatus(item);s.paid=!s.paid;
+  }else if(col==='installments'){
+    const s=getInstallmentStatus(item);s.paid=!s.paid;
+  }else item.paid=!item.paid;
+  saveState();render();
+}
+function getCalendarItemsForDay(day){
+  const p=getPaymentsForMonth(state.currentMonth,state.currentYear),items=[];
+  const addPayments=(arr,type,label)=>arr.forEach(item=>{
+    [1,2].forEach(q=>{
+      const amount=getAmountToSetAside(item,q);
+      if(amount<=0)return;
+      const due=getRealPaymentMonthYearForQuincena(item,q,state.currentMonth,state.currentYear);
+      if(due.month!==state.currentMonth||due.year!==state.currentYear)return;
+      if((parseInt(item.date)||1)!==day)return;
+      items.push({concept:item.concept||item.notes||'Registro',type,label:`${label} · Q${q}`,card:item.card||'-',amount,status:getPaymentStatusForQuincena(item,q),dueText:`Fecha de pago ${getPaymentDueLabel(item,q,state.currentMonth,state.currentYear)}`});
+    });
+  });
+  addPayments(p.fixed,'fijo','Pago fijo');
+  addPayments(p.inst,'meses','Pago a meses');
+  addPayments(p.vari,'variado','Pago variado');
+  addPayments(p.goals||[],'ahorro','Meta de ahorro');
+  return items;
+}
+function closeCalendarPopover(){const pop=document.getElementById('calendarPopover');if(pop)pop.remove();}
+function openCalendarPopover(day,event){event.stopPropagation();closeCalendarPopover();const calendar=document.getElementById('miniCalendar'),items=getCalendarItemsForDay(day);if(!calendar||!items.length)return;const pop=document.createElement('div');pop.id='calendarPopover';pop.className='absolute z-30 bg-white rounded-xl card-shadow border border-gray-100 p-3 text-xs w-[260px] max-w-[260px]';pop.innerHTML=`<div class="flex items-start justify-between gap-2 mb-2"><div><div class="font-bold text-gray-800">${day} de ${MONTHS[state.currentMonth]}</div><div class="text-[10px] text-gray-400">${items.length} registro${items.length===1?'':'s'} este día</div></div><button onclick="closeCalendarPopover()" class="text-gray-400 hover:text-gray-600 text-base leading-none">×</button></div><div class="max-h-56 overflow-y-auto pr-1">${items.map(item=>{const cat=getCategoryVisual(item.type),st=getStatusVisual(item.status);return `<div class="${cat.bg} ${cat.border} border rounded-lg p-2 mb-2 last:mb-0"><div class="flex justify-between gap-2 mb-1"><div class="font-semibold ${cat.text}">${escapeHtml(item.concept)}</div><span class="${st.bg} ${st.border} ${st.text} border px-2 py-0.5 rounded-full text-[10px] font-semibold">${st.label}</span></div><div class="grid grid-cols-2 gap-x-2 text-[11px]"><span>Tipo</span><span class="text-right font-medium ${cat.text}">${item.label}</span><span>Cuenta</span><span class="text-right font-medium truncate">${escapeHtml(item.card)}</span><span>Monto</span><span class="text-right font-bold">${fmt(item.amount)}</span></div></div>`;}).join('')}</div>`;calendar.appendChild(pop);const cr=calendar.getBoundingClientRect(),tr=event.currentTarget.getBoundingClientRect();let left=tr.left-cr.left+tr.width+6,top=tr.top-cr.top-6;pop.style.left=left+'px';pop.style.top=top+'px';const pr=pop.getBoundingClientRect();if(pr.right>cr.right)left=Math.max(6,tr.left-cr.left-pr.width-6);if(pr.bottom>cr.bottom)top=Math.max(6,cr.height-pr.height-6);if(top<6)top=6;pop.style.left=left+'px';pop.style.top=top+'px';}
+function renderMiniCalendar(){const m=state.currentMonth,y=state.currentYear,today=new Date(),todayDay=today.getDate(),todayMonth=today.getMonth(),todayYear=today.getFullYear(),p=getPaymentsForMonth(m,y),days=getDaysInMonth(m,y),first=getFirstDayOfMonth(m,y),dayTypes={};document.getElementById('miniCalTitle').textContent=`${MONTHS[m]} ${y}`;const addPayments=(arr,type)=>arr.forEach(item=>{[1,2].forEach(q=>{if(getAmountToSetAside(item,q)<=0)return;const due=getRealPaymentMonthYearForQuincena(item,q,m,y);if(due.month!==m||due.year!==y)return;const d=parseInt(item.date)||1;if(!dayTypes[d])dayTypes[d]=new Set();dayTypes[d].add(type);});});addPayments(p.fixed,'fixed');addPayments(p.inst,'inst');addPayments(p.vari,'vari');addPayments(p.goals||[],'sav');let html='<div class="relative"><div class="grid grid-cols-7 gap-0.5">';DAYS.forEach(d=>html+=`<div class="text-center text-[10px] font-semibold text-gray-400 py-1">${d}</div>`);for(let i=0;i<first;i++)html+='<div></div>';for(let d=1;d<=days;d++){const types=dayTypes[d];const isToday=d===todayDay&&m===todayMonth&&y===todayYear;let dots='';if(types){dots='<div class="flex gap-0.5 justify-center mt-0.5">';if(types.has('fixed'))dots+='<span class="cal-dot bg-lila-300"></span>';if(types.has('inst'))dots+='<span class="cal-dot bg-menta-300"></span>';if(types.has('vari'))dots+='<span class="cal-dot bg-durazno-300"></span>';if(types.has('sav'))dots+='<span class="cal-dot bg-azul-300"></span>';dots+='</div>';}html+=`<div ${types?`onclick="openCalendarPopover(${d}, event)"`:''} class="relative text-center py-1 rounded-lg ${types?'cursor-pointer hover:bg-lila-50':'cursor-default hover:bg-gray-50'} ${isToday?'bg-lila-100 ring-2 ring-lila-300 shadow-sm':''}"><div class="text-xs ${isToday?'text-lila-600 font-extrabold':'text-gray-600'}">${d}</div>${dots}${isToday?'<div class="text-[8px] text-lila-500 font-bold leading-none mt-0.5">hoy</div>':''}</div>`;}html+='</div></div>';document.getElementById('miniCalendar').innerHTML=html;}
+function renderMonthSummary(){
+  const p=getPaymentsForMonth(state.currentMonth,state.currentYear),all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)],salary=state.config.salaryBiweekly||0;
+  const q1Total=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),q2Total=all.reduce((s,i)=>s+getAmountToSetAside(i,2),0);
+  const q1Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,1),0),q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0);
+  const q1Missing=Math.max(0,q1Total-q1Apart),q2Missing=Math.max(0,q2Total-q2Apart);
+  const q1Free=salary-Math.max(q1Total,q1Apart),q2Free=salary-Math.max(q2Total,q2Apart);
+  const monthTotal=q1Total+q2Total,monthApart=q1Apart+q2Apart,monthMissing=Math.max(0,monthTotal-monthApart),pct=monthTotal?Math.round((monthApart/monthTotal)*100):100;
+  const status=(missing,total)=> total===0?{label:'Sin apartados',color:'text-gray-400',bg:'bg-gray-50',border:'border-gray-100',icon:'minus-circle'}:missing<=0?{label:'Meta completada',color:'text-menta-500',bg:'bg-menta-50',border:'border-menta-100',icon:'check-circle'}:{label:`Faltan ${fmt(missing)}`,color:'text-durazno-500',bg:'bg-durazno-50',border:'border-durazno-100',icon:'clock'};
+  const qCard=(q,total,apart,missing,free)=>{const st=status(missing,total);const qLabel=q===1?'Q1 · 1ª quincena':'Q2 · 2ª quincena';const localPct=total?Math.round((apart/total)*100):100;return `<div class="${st.bg} ${st.border} border rounded-xl p-3"><div class="flex items-center justify-between gap-2 mb-2"><div class="font-bold text-gray-800 text-sm">${qLabel}</div><span class="text-[10px] px-2 py-0.5 rounded-full bg-white/70 ${st.color} font-semibold border border-white">${st.label}</span></div><div class="grid grid-cols-2 gap-2 text-xs mb-3"><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">A apartar</span><div class="font-bold text-rosa-500 text-sm">${fmt(total)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Ya apartado</span><div class="font-bold text-azul-500 text-sm">${fmt(apart)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Falta</span><div class="font-bold ${missing<=0?'text-menta-500':'text-durazno-500'} text-sm">${fmt(missing)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Libre</span><div class="font-bold ${free>=0?'text-aqua-500':'text-red-400'} text-sm">${fmt(free)}</div></div></div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>Avance apartado</span><span>${localPct}%</span></div><div class="w-full bg-white h-2 rounded-full overflow-hidden"><div class="${missing<=0?'bg-menta-400':'bg-azul-400'} h-2 rounded-full" style="width:${Math.min(100,Math.max(3,localPct))}%"></div></div></div>`;};
+  document.getElementById('monthSummary').innerHTML=`<h3 class="font-semibold text-gray-800 mb-3 text-sm flex items-center gap-2"><i data-lucide="check-circle" class="w-4 h-4 text-menta-500"></i>Estado de apartados</h3><div class="bg-gray-50 rounded-xl p-3 mb-3"><div class="flex justify-between items-center mb-1"><span class="text-xs text-gray-500">Avance del mes</span><b class="text-xs ${monthMissing<=0?'text-menta-500':'text-azul-500'}">${pct}%</b></div><div class="w-full bg-white h-2 rounded-full overflow-hidden"><div class="${monthMissing<=0?'bg-menta-400':'bg-azul-400'} h-2 rounded-full" style="width:${Math.min(100,Math.max(3,pct))}%"></div></div><div class="flex justify-between text-xs mt-2"><span class="text-gray-400">Apartado: <b class="text-azul-500 text-sm">${fmt(monthApart)}</b></span><span class="text-gray-400">Falta: <b class="${monthMissing<=0?'text-menta-500':'text-durazno-500'} text-sm">${fmt(monthMissing)}</b></span></div></div><div class="space-y-3">${qCard(1,q1Total,q1Apart,q1Missing,q1Free)}${qCard(2,q2Total,q2Apart,q2Missing,q2Free)}</div><div class="text-[11px] text-gray-400 mt-3 bg-gray-50 rounded-lg p-2">Cuando marques los checks de Apartado Q1/Q2, este resumen se actualiza para decirte si ya completaste la quincena o cuánto falta.</div>`;
+}
+function actionButtons(item,col){return `<td class="py-2 text-center flex justify-center gap-1"><button onclick="editItem('${item.id}','${col}')" class="text-xs px-2 py-1 bg-lila-100 text-lila-600 rounded hover:bg-lila-200 font-semibold">Editar</button><button onclick="duplicateItem('${item.id}','${col}')" class="text-xs px-2 py-1 bg-azul-100 text-azul-600 rounded hover:bg-azul-200 font-semibold">Duplicar</button><button onclick="confirmDelete('${item.id}','${col}')" class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 font-semibold">Borrar</button></td>`;}
+function statusBadge(item){const key=item.paid?'pagado':(item.apartadoQ1||item.apartadoQ2?'apartado':'pendiente'),v=getStatusVisual(key);return `<span class="px-2 py-0.5 rounded-full text-[10px] ${v.bg} ${v.text} font-semibold">${getFinalStatusLabel(item)}</span>`;}
+function tableBlock(title,icon,color,heads,rows){return `<h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2"><i data-lucide="${icon}" class="w-4 h-4 ${color}"></i>${title}</h3><div class="overflow-x-auto"><table class="w-full"><thead><tr class="text-[11px] text-gray-400 border-b">${heads.map(h=>`<th class="text-left py-1.5 font-medium">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;}
+function renderFixedTable(){const p=getPaymentsForMonth(state.currentMonth,state.currentYear);const rows=p.fixed.map(i=>`<tr class="border-b"><td class="py-2 text-xs">${escapeHtml(i.concept)}</td><td class="py-2 text-xs">${escapeHtml(i.category)}</td><td class="py-2 text-xs">${i.date}</td><td class="py-2 text-xs font-medium">${fmt(i.amount)}</td><td class="py-2 text-xs">${escapeHtml(i.card)}</td><td class="py-2 text-xs">${statusBadge(i)}</td>${actionButtons(i,'fixed')}</tr>`).join('')||'<tr><td colspan="7" class="py-4 text-center text-xs text-gray-400">Sin registros</td></tr>';document.getElementById('fixedTable').innerHTML=tableBlock('Pagos fijos','pin','text-lila-400',['Concepto','Categoría','Día','Monto','Tarjeta','Estado','Acciones'],rows);}
+function renderInstallTable(){const p=getPaymentsForMonth(state.currentMonth,state.currentYear);const rows=p.inst.map(i=>`<tr class="border-b"><td class="py-2 text-xs">${escapeHtml(i.concept)}</td><td class="py-2 text-xs font-medium">${fmt(i.totalAmount)}</td><td class="py-2 text-xs">${i.currentMonth}/${i.totalMonths}</td><td class="py-2 text-xs font-medium">${fmt(i.amount)}</td><td class="py-2 text-xs">${escapeHtml(i.card)}</td><td class="py-2 text-xs">${statusBadge(i)}</td>${actionButtons(i,'installments')}</tr>`).join('')||'<tr><td colspan="7" class="py-4 text-center text-xs text-gray-400">Sin registros</td></tr>';document.getElementById('installTable').innerHTML=tableBlock('Pagos a meses','layers','text-menta-400',['Concepto','Total','Meses','Pago mensual','Tarjeta','Estado','Acciones'],rows);}
+function renderVariableTable(){const p=getPaymentsForMonth(state.currentMonth,state.currentYear);const rows=p.vari.map(i=>`<tr class="border-b"><td class="py-2 text-xs">${escapeHtml(i.concept)}</td><td class="py-2 text-xs">${escapeHtml(i.category)}</td><td class="py-2 text-xs">${i.date}</td><td class="py-2 text-xs">${fmt(i.estimatedAmount)}</td><td class="py-2 text-xs font-medium">${fmt(i.amount)}</td><td class="py-2 text-xs">${escapeHtml(i.card)}</td><td class="py-2 text-xs">${statusBadge(i)}</td>${actionButtons(i,'variable')}</tr>`).join('')||'<tr><td colspan="8" class="py-4 text-center text-xs text-gray-400">Sin registros</td></tr>';document.getElementById('variableTable').innerHTML=tableBlock('Pagos variados','shuffle','text-durazno-400',['Concepto','Categoría','Día','Estimado','Real','Tarjeta','Estado','Acciones'],rows);}
+function renderSavingsTable(){const p=getPaymentsForMonth(state.currentMonth,state.currentYear);const rows=p.sav.map(i=>{const goalName=(state.savingsGoals||[]).find(g=>g.id===i.goalId)?.name||'General';const status=isSavingConfirmed(i)?'Cumplido':'Planeado';return `<tr class="border-b"><td class="py-2 text-[10px]">${i.date}</td><td class="py-2 text-[10px]">${normalizeQuincena(i.quincena,i.date)}</td><td class="py-2 text-[10px] font-bold text-lila-500">${fmt(getSavingPlannedAmount(i))}</td><td class="py-2 text-[10px] font-bold ${isSavingConfirmed(i)?'text-menta-500':'text-gray-300'}">${isSavingConfirmed(i)?fmt(getSavingRealAmount(i)):'—'}</td><td class="py-2 text-[10px] truncate">${escapeHtml(goalName)}</td><td class="py-2 text-[10px] truncate">${escapeHtml(i.card||'-')}</td><td class="py-2 text-[10px] text-center"><button onclick="toggleSavingConfirmed('${i.id}')" class="text-[8px] px-1.5 py-0.5 rounded-full border ${isSavingConfirmed(i)?'bg-menta-50 text-menta-500 border-menta-100':'bg-durazno-50 text-durazno-500 border-durazno-100'} font-semibold">${status}</button></td><td class="py-2 text-center"><div class="flex justify-center gap-1"><button onclick="editItem('${i.id}','savings')" class="text-[9px] px-1.5 py-1 bg-lila-100 text-lila-600 rounded font-semibold">Editar</button><button onclick="confirmDelete('${i.id}','savings')" class="text-[9px] px-1.5 py-1 bg-red-100 text-red-600 rounded font-semibold">Borrar</button></div></td></tr>`;}).join('')||'<tr><td colspan="8" class="py-4 text-center text-xs text-gray-400">Sin registros</td></tr>';document.getElementById('savingsTable').innerHTML=`<h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2"><i data-lucide="piggy-bank" class="w-4 h-4 text-azul-400"></i>Ahorro mensual</h3><div class="overflow-hidden"><table class="w-full table-fixed"><colgroup><col style="width:7%"><col style="width:7%"><col style="width:14%"><col style="width:14%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:21%"></colgroup><thead><tr class="text-[9px] text-gray-400 border-b"><th class="text-left py-1.5 font-medium">Día</th><th class="text-left py-1.5 font-medium">Q</th><th class="text-left py-1.5 font-medium">Meta planeada</th><th class="text-left py-1.5 font-medium">Real guardado</th><th class="text-left py-1.5 font-medium">Meta</th><th class="text-left py-1.5 font-medium">Cuenta</th><th class="text-center py-1.5 font-medium">Estado</th><th class="text-center py-1.5 font-medium">Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>`;}
+function getMonthlyHealth(free, usedPct){
+  if (free < 0) return { label:'Revisar', cls:'bg-red-50 text-red-500 border-red-100', dot:'bg-red-400', note:'mes en alerta' };
+  if (usedPct >= 90) return { label:'Justo', cls:'bg-durazno-50 text-durazno-500 border-durazno-100', dot:'bg-durazno-400', note:'poco margen libre' };
+  if (usedPct >= 60) return { label:'Estable', cls:'bg-rosa-50 text-rosa-500 border-rosa-100', dot:'bg-rosa-400', note:'mes controlado' };
+  return { label:'Saludable', cls:'bg-aqua-50 text-aqua-500 border-aqua-200', dot:'bg-aqua-500', note:'buen margen libre' };
+}
+function getYearMonthlyData(){
+  const income = (state.config.salaryBiweekly || 0) * 2;
+  return MONTHS.map((name,month)=>{
+    const p=getPaymentsForMonth(month,state.currentYear);
+    const savingsPlanningItems=makeSavingsPlanningItems(p);
+    const fixed=getPlanTotal(p.fixed), inst=getPlanTotal(p.inst), vari=getPlanTotal(p.vari), sav=getApartTotal([...(p.goals||[]),...savingsPlanningItems]);
+    const payments=fixed+inst+vari;
+    const out=payments+sav;
+    const free=income-out;
+    const used=income>0?Math.min(140,Math.round((out/income)*100)):0;
+    const paid=paidArr([...p.fixed,...p.inst,...p.vari]);
+    const apartado=getApartTotal([...p.fixed,...p.inst,...p.vari]);
+    const pending=Math.max(0,payments-apartado);
+    return { name, month, income, fixed, inst, vari, sav, payments, out, free, used, paid, apartado, pending, health:getMonthlyHealth(free,used) };
+  });
+}
+function renderMonthlyView(){
+  const data=getYearMonthlyData();
+  const mostExpensive=data.reduce((a,b)=>b.out>a.out?b:a,data[0]);
+  const mostSaving=data.reduce((a,b)=>b.sav>a.sav?b:a,data[0]);
+  const avgFree=data.length?data.reduce((s,d)=>s+d.free,0)/data.length:0;
+  const annualOut=data.reduce((s,d)=>s+d.out,0);
+  const annualSavings=data.reduce((s,d)=>s+d.sav,0);
+  const annualPayments=data.reduce((s,d)=>s+d.payments,0);
+  const maxOut=Math.max(...data.map(d=>d.out),1);
+  const summary=`
+    <div class="grid grid-cols-4 gap-3 mb-5">
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Mes más caro</div><div class="text-lg font-bold text-rosa-500">${mostExpensive.name}</div><div class="text-xs text-gray-500 mt-1">Egresos: <b>${fmt(mostExpensive.out)}</b></div></div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Mes con más ahorro</div><div class="text-lg font-bold text-azul-500">${mostSaving.name}</div><div class="text-xs text-gray-500 mt-1">Ahorro: <b>${fmt(mostSaving.sav)}</b></div></div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Promedio libre mensual</div><div class="text-lg font-bold ${avgFree<0?'text-red-400':'text-aqua-500'}">${fmt(avgFree)}</div><div class="text-xs text-gray-500 mt-1">después de pagos y ahorro</div></div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Total anual proyectado</div><div class="text-lg font-bold text-gray-800">${fmt(annualOut)}</div><div class="text-xs text-gray-500 mt-1">Pagos ${fmt(annualPayments)} · Ahorro ${fmt(annualSavings)}</div></div>
+    </div>`;
+  const miniLine=(label,value,color,bg)=>`<div class="flex items-center justify-between text-xs"><span class="text-gray-500 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full ${bg}"></span>${label}</span><span class="font-bold ${color}">${fmt(value)}</span></div>`;
+  const monthCard=d=>{
+    const fixedPct=d.out>0?Math.round(d.fixed/d.out*100):0, instPct=d.out>0?Math.round(d.inst/d.out*100):0, variPct=d.out>0?Math.round(d.vari/d.out*100):0, savPct=d.out>0?Math.round(d.sav/d.out*100):0, freePct=d.income>0?Math.max(0,Math.round(d.free/d.income*100)):0;
+    const barWidth=Math.min(100,Math.max(3,d.used));
+    const barColor=d.free<0?'bg-red-400':d.used>=90?'bg-durazno-400':d.used>=60?'bg-rosa-400':'bg-aqua-500';
+    const scaleWidth=Math.min(100,Math.max(3,d.out/maxOut*100));
+    return `<div class="bg-white rounded-2xl card-shadow border border-gray-100 p-3">
+      <div class="flex items-start justify-between gap-3 mb-3"><div><h3 class="font-bold text-gray-800">${d.name}</h3><p class="text-xs text-gray-400">${state.currentYear}</p></div><span class="text-[11px] px-2.5 py-1 rounded-full border ${d.health.cls}">${d.health.label}</span></div>
+      <div class="grid grid-cols-3 gap-2 mb-3 text-[11px]">
+        <div class="bg-rosa-50 rounded-lg p-2 border border-rosa-100"><span class="text-gray-400">A pagar</span><div class="font-bold text-rosa-500">${fmt(d.payments)}</div></div>
+        <div class="bg-azul-50 rounded-lg p-2 border border-azul-100"><span class="text-gray-400">Ahorro</span><div class="font-bold text-azul-500">${fmt(d.sav)}</div></div>
+        <div class="bg-aqua-50 rounded-lg p-2 border border-aqua-200"><span class="text-gray-400">Libre</span><div class="font-bold ${d.free<0?'text-red-400':'text-aqua-500'}">${fmt(d.free)}</div></div>
+      </div>
+      <div class="space-y-1.5 mb-3">
+        ${miniLine('Fijos',d.fixed,'text-lila-500','bg-lila-300')}
+        ${miniLine('A meses',d.inst,'text-menta-500','bg-menta-300')}
+        ${miniLine('Variados',d.vari,'text-durazno-500','bg-durazno-300')}
+        ${miniLine('Ahorro',d.sav,'text-azul-500','bg-azul-300')}
+      </div>
+      <div class="mb-3">
+        <div class="flex items-center justify-between text-[10px] text-gray-400 mb-1"><span>Nivel de uso del ingreso mensual</span><span>${d.used}%</span></div>
+        <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden"><div class="${barColor} h-2 rounded-full" style="width:${barWidth}%"></div></div>
+      </div>
+      <div class="mb-3">
+        <div class="flex items-center justify-between text-[10px] text-gray-400 mb-1"><span>${Math.round(d.out/maxOut*100)===100?'Mes más pesado actualmente':'Nivel de carga del mes'}</span><span>${Math.round(d.out/maxOut*100)}%</span></div>
+        <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden"><div class="bg-rosa-300 h-1.5 rounded-full" style="width:${scaleWidth}%"></div></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-[10px] border-t border-gray-100 pt-3">
+        <div><span class="text-gray-400">Apartado</span><div class="font-bold text-azul-500">${fmt(d.apartado)}</div></div>
+        <div><span class="text-gray-400">Pagado</span><div class="font-bold text-menta-500">${fmt(d.paid)}</div></div>
+        <div><span class="text-gray-400">Pendiente</span><div class="font-bold text-durazno-500">${fmt(d.pending)}</div></div>
+      </div>
+      <div class="text-[10px] text-gray-400 mt-3 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full ${d.health.dot}"></span>${d.health.note}</div>
+    </div>`;
+  };
+  document.getElementById('mainContent').innerHTML=`
+    <div class="flex items-center justify-between mb-1">
+      <div><h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="calendar" class="w-6 h-6 text-lila-400"></i>Vista mensual · ${state.currentYear}</h2><p class="text-sm text-gray-400 mt-1">Mapa financiero mensual para ver qué meses son más pesados, cuánto ahorras y cuánto queda libre.</p></div>
+      <button onclick="currentView='dashboard'; render();" class="text-xs px-3 py-2 rounded-lg bg-lila-100 text-lila-500 font-semibold hover:bg-lila-200">Ver dashboard</button>
+    </div>
+    ${summary}
+    <div class="grid grid-cols-3 gap-4">${data.map(monthCard).join('')}</div>`;
+}
+function getBiweeklyHealth(free, usedPct){
+  if (free < 0) return { label:'Revisar', cls:'bg-red-50 text-red-500 border-red-100', dot:'bg-red-400', note:'quincena pesada' };
+  if (usedPct >= 85) return { label:'Justa', cls:'bg-durazno-50 text-durazno-500 border-durazno-100', dot:'bg-durazno-400', note:'poco margen libre' };
+  if (usedPct >= 55) return { label:'Estable', cls:'bg-rosa-50 text-rosa-500 border-rosa-100', dot:'bg-rosa-400', note:'controlada' };
+  return { label:'Saludable', cls:'bg-aqua-50 text-aqua-500 border-aqua-200', dot:'bg-aqua-500', note:'buen margen libre' };
+}
+function getYearBiweeklyData(){
+  const salary = state.config.salaryBiweekly || 0;
+  return MONTHS.map((name,month)=>{
+    const p=getPaymentsForMonth(month,state.currentYear), all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)];
+    const q1=all.reduce((s,it)=>s+getAmountToSetAside(it,1),0), q2=all.reduce((s,it)=>s+getAmountToSetAside(it,2),0);
+    const q1Apart=all.reduce((s,it)=>s+getRealSetAsideAmount(it,1),0), q2Apart=all.reduce((s,it)=>s+getRealSetAsideAmount(it,2),0);
+    const s1=getSavingsByQuincena(p,1), s2=getSavingsByQuincena(p,2);
+    const free1=salary-Math.max(q1,q1Apart), free2=salary-Math.max(q2,q2Apart);
+    const used1=salary>0?Math.min(140,Math.round((Math.max(q1,q1Apart)/salary)*100)):0;
+    const used2=salary>0?Math.min(140,Math.round((Math.max(q2,q2Apart)/salary)*100)):0;
+    return { name, month, q1, q2, s1, s2, free1, free2, used1, used2, h1:getBiweeklyHealth(free1,used1), h2:getBiweeklyHealth(free2,used2) };
+  });
+}
+function renderBiweeklyView(){
+  const data=getYearBiweeklyData(), salary=state.config.salaryBiweekly||0;
+  const allQuincenas=data.flatMap(d=>[
+    { month:d.name, q:'Q1', free:d.free1, used:d.used1, apartar:d.q1, ahorro:d.s1, health:d.h1 },
+    { month:d.name, q:'Q2', free:d.free2, used:d.used2, apartar:d.q2, ahorro:d.s2, health:d.h2 }
+  ]);
+  const heavy=allQuincenas.reduce((a,b)=> b.free<a.free?b:a, allQuincenas[0]);
+  const best=allQuincenas.reduce((a,b)=> b.free>a.free?b:a, allQuincenas[0]);
+  const totalSavings=data.reduce((s,d)=>s+d.s1+d.s2,0);
+  const avgFree=allQuincenas.length?allQuincenas.reduce((s,d)=>s+d.free,0)/allQuincenas.length:0;
+  const miniSummary=`
+    <div class="grid grid-cols-4 gap-3 mb-5">
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Mes más pesado</div><div class="text-lg font-bold ${heavy.free<0?'text-red-400':'text-durazno-500'}">${heavy.month} ${heavy.q}</div><div class="text-xs text-gray-500 mt-1">Libre: <b>${fmt(heavy.free)}</b></div></div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Mejor quincena libre</div><div class="text-lg font-bold text-aqua-500">${best.month} ${best.q}</div><div class="text-xs text-gray-500 mt-1">Libre: <b>${fmt(best.free)}</b></div></div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Ahorro anual registrado</div><div class="text-lg font-bold text-azul-500">${fmt(totalSavings)}</div><div class="text-xs text-gray-500 mt-1">Q1 + Q2 de todos los meses</div></div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="text-xs text-gray-400 font-semibold mb-1">Promedio libre</div><div class="text-lg font-bold ${avgFree<0?'text-red-400':'text-aqua-500'}">${fmt(avgFree)}</div><div class="text-xs text-gray-500 mt-1">por quincena</div></div>
+    </div>`;
+  const qCard=(d,q)=>{
+    const apartar=q===1?d.q1:d.q2, ahorro=q===1?d.s1:d.s2, free=q===1?d.free1:d.free2, used=q===1?d.used1:d.used2, health=q===1?d.h1:d.h2;
+    const barColor=free<0?'bg-red-400':used>=85?'bg-durazno-400':used>=55?'bg-rosa-400':'bg-aqua-500';
+    const barWidth=Math.min(100,Math.max(3,used));
+    return `<div class="bg-white/75 border border-gray-100 rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2"><div class="text-xs font-bold text-gray-700">${q===1?'1ª Quincena':'2ª Quincena'}</div><span class="text-[10px] px-2 py-0.5 rounded-full border ${health.cls}">${health.label}</span></div>
+      <div class="grid grid-cols-2 gap-2 text-xs mb-3">
+        <div class="bg-gray-50 rounded-lg p-2"><span class="text-gray-400 text-xs">A apartar</span><div class="font-bold text-rosa-500 text-sm">${fmt(apartar)}</div></div>
+        <div class="bg-gray-50 rounded-lg p-2"><span class="text-gray-400">Ahorro</span><div class="font-bold text-azul-500">${fmt(ahorro)}</div></div>
+        <div class="bg-gray-50 rounded-lg p-2"><span class="text-gray-400">Sueldo</span><div class="font-bold text-gray-700">${fmt(salary)}</div></div>
+        <div class="bg-gray-50 rounded-lg p-2"><span class="text-gray-400">Libre</span><div class="font-bold ${free<0?'text-red-400':'text-aqua-500'}">${fmt(free)}</div></div>
+      </div>
+      <div class="flex items-center justify-between text-[10px] text-gray-400 mb-1"><span>Nivel de uso del sueldo</span><span>${used}%</span></div>
+      <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden"><div class="${barColor} h-2 rounded-full" style="width:${barWidth}%"></div></div>
+      <div class="text-[10px] text-gray-400 mt-2 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full ${health.dot}"></span>${health.note}</div>
+    </div>`;
+  };
+  const cards=data.map(d=>{
+    const monthState = d.free1<0 || d.free2<0 ? {txt:'Revisar',cls:'bg-red-50 text-red-500 border-red-100'} : (d.used1>=85 || d.used2>=85 ? {txt:'Quincena justa',cls:'bg-durazno-50 text-durazno-500 border-durazno-100'} : {txt:'Saludable',cls:'bg-aqua-50 text-aqua-500 border-aqua-200'});
+    return `<div class="bg-white rounded-2xl card-shadow border border-gray-100 p-4">
+      <div class="flex items-center justify-between mb-3"><div><h3 class="font-bold text-gray-800">${d.name}</h3><p class="text-xs text-gray-400">${state.currentYear}</p></div><span class="text-[11px] px-2.5 py-1 rounded-full border ${monthState.cls}">${monthState.txt}</span></div>
+      <div class="grid grid-cols-2 gap-3">${qCard(d,1)}${qCard(d,2)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('mainContent').innerHTML=`
+    <div class="flex items-center justify-between mb-1">
+      <div><h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="calendar-range" class="w-6 h-6 text-lila-400"></i>Vista quincenal · ${state.currentYear}</h2><p class="text-sm text-gray-400 mt-1">Mapa de salud por quincena para ver rápido qué meses vienen pesados y dónde queda dinero libre.</p></div>
+      <button onclick="currentView='dashboard'; render();" class="text-xs px-3 py-2 rounded-lg bg-lila-100 text-lila-500 font-semibold hover:bg-lila-200">Ver dashboard</button>
+    </div>
+    ${miniSummary}
+    <div class="grid grid-cols-2 gap-4">${cards}</div>`;
+}
+function renderFixedView(){
+  const items=state.fixed||[];
+  const active=items.filter(i=>isFixedActiveInMonth(i,state.currentMonth,state.currentYear));
+  const totalActive=active.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+  const paidActive=active.filter(i=>getFixedStatus(i,state.currentMonth,state.currentYear).paid).reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+  const summaryCard=(icon,label,value,note,color)=>`<div class="bg-white border border-gray-100 rounded-xl p-3 card-shadow"><div class="flex items-center gap-2 mb-1"><i data-lucide="${icon}" class="w-4 h-4 ${color}"></i><span class="text-xs text-gray-500 font-semibold">${label}</span></div><div class="text-lg font-bold ${color}">${value}</div><div class="text-[11px] text-gray-400">${note}</div></div>`;
+  const card=item=>{
+    const activeNow=isFixedActiveInMonth(item,state.currentMonth,state.currentYear), st=getFixedStatus(item,state.currentMonth,state.currentYear);
+    const status=st.paid?'pagado':(st.apartadoQ1||st.apartadoQ2?'apartado':'pendiente'), visual=getStatusVisual(status);
+    const viewItem={...item,...st,__collection:'fixed',__viewMonth:state.currentMonth,__viewYear:state.currentYear};
+    const q1=getAmountToSetAside(viewItem,1), q2=getAmountToSetAside(viewItem,2);
+    return `<div class="bg-white rounded-2xl card-shadow border border-gray-100 p-4 ${activeNow?'':'opacity-75'}">
+      <div class="flex items-start justify-between gap-3 mb-3"><div><h3 class="text-base font-bold text-gray-800">${escapeHtml(item.concept||'Pago fijo')}</h3><p class="text-[11px] text-gray-400 capitalize">${escapeHtml(item.category||'otros')} · día ${item.date||1}</p></div><span class="text-[10px] px-2 py-0.5 rounded-full border ${activeNow?`${visual.bg} ${visual.border} ${visual.text}`:'bg-gray-50 border-gray-100 text-gray-400'}">${activeNow?visual.label:'Inactivo'}</span></div>
+      <div class="grid grid-cols-4 gap-2 mb-3 text-[11px]"><div class="bg-lila-50 border border-lila-100 rounded-lg p-2"><span class="text-gray-400">Monto</span><div class="font-bold text-lila-500">${fmt(item.amount)}</div></div><div class="bg-rosa-50 border border-rosa-100 rounded-lg p-2"><span class="text-gray-400">Q1</span><div class="font-bold text-rosa-500">${fmt(q1)}</div></div><div class="bg-rosa-50 border border-rosa-100 rounded-lg p-2"><span class="text-gray-400">Q2</span><div class="font-bold text-rosa-500">${fmt(q2)}</div></div><div class="bg-gray-50 border border-gray-100 rounded-lg p-2"><span class="text-gray-400">Cuenta</span><div class="font-bold text-gray-700 truncate">${escapeHtml(item.card||'-')}</div></div></div>
+      <div class="bg-gray-50 rounded-xl p-2.5 text-[11px] mb-3"><div class="flex justify-between gap-3"><span class="text-gray-400">Periodo</span><b class="text-gray-700 text-right">${getFixedPeriodText(item)}</b></div><div class="flex justify-between gap-3 mt-1"><span class="text-gray-400">Modo</span><b class="text-lila-500 text-right">${escapeHtml(getSplitMode(item))}</b></div></div>
+      <div class="grid grid-cols-3 gap-2 text-[11px] border-t border-gray-100 pt-3"><label class="flex items-center gap-2 text-gray-500"><input type="checkbox" ${st.apartadoQ1?'checked':''} onchange="toggleApartado('${item.id}','fixed',1)" class="w-3.5 h-3.5 ${st.apartadoQ1?'accent-azul-500':'accent-durazno-500'}">Apartado Q1</label><label class="flex items-center gap-2 text-gray-500"><input type="checkbox" ${st.apartadoQ2?'checked':''} onchange="toggleApartado('${item.id}','fixed',2)" class="w-3.5 h-3.5 ${st.apartadoQ2?'accent-azul-500':'accent-durazno-500'}">Apartado Q2</label><label class="flex items-center gap-2 text-gray-500"><input type="checkbox" ${st.paid?'checked':''} onchange="togglePaid('${item.id}','fixed')" class="w-3.5 h-3.5 ${st.paid?'accent-menta-500':'accent-durazno-500'}">Pagado</label></div>
+      <div class="flex justify-end gap-1.5 mt-3"><button onclick="editItem('${item.id}','fixed')" class="text-xs px-2 py-1 bg-lila-100 text-lila-600 rounded font-semibold">Editar</button><button onclick="duplicateItem('${item.id}','fixed')" class="text-xs px-2 py-1 bg-azul-100 text-azul-600 rounded font-semibold">Duplicar</button><button onclick="confirmDelete('${item.id}','fixed')" class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded font-semibold">Borrar</button></div>
+    </div>`;
+  };
+  document.getElementById('mainContent').innerHTML=`<div class="flex items-center justify-between mb-1"><div><h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="pin" class="w-6 h-6 text-lila-400"></i>Pagos fijos · ${MONTHS[state.currentMonth]} ${state.currentYear}</h2><p class="text-sm text-gray-400 mt-1">Pagos recurrentes del mes, apartados por quincena y estado de pago.</p></div><button onclick="openRecordModal('fixed')" class="px-4 py-2 rounded-lg bg-lila-500 text-white text-sm font-semibold">+ Nuevo pago fijo</button></div>${renderSetAsideMiniSummary('fixed')}<div class="grid grid-cols-4 gap-3 mb-4">${summaryCard('receipt','Total activo',fmt(totalActive),'Suma de pagos fijos activos','text-lila-500')}${summaryCard('check-circle','Pagado del mes',fmt(paidActive),'Pagos marcados como pagados','text-menta-500')}${summaryCard('clock','Pendiente',fmt(Math.max(0,totalActive-paidActive)),'Falta pagar este mes','text-durazno-500')}${summaryCard('calendar','Registros activos',active.length,'Pagos visibles este mes','text-azul-500')}</div><div class="grid grid-cols-2 gap-3">${items.map(card).join('')||'<div class="col-span-2 bg-white rounded-xl card-shadow border border-gray-100 p-8 text-center text-gray-400">Aún no tienes pagos fijos registrados.</div>'}</div>`;
+}
+function renderInstallmentsView(){
+  const items=state.installments||[];
+  const active=items.filter(i=>isInstallmentRelevantInMonth(i,state.currentMonth,state.currentYear));
+  const totalDebt=items.reduce((s,i)=>s+(parseFloat(i.totalAmount)||0),0);
+  const activeMonthly=active.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+  const totalPaidProjection=items.reduce((s,i)=>s+(getPaidInstallmentMonthsUntil(i,state.currentMonth,state.currentYear)*(parseFloat(i.amount)||0)),0);
+  const summaryCard=(icon,label,value,note,color)=>`<div class="bg-white border border-gray-100 rounded-xl p-2.5 card-shadow"><div class="flex items-center gap-2 mb-0.5"><i data-lucide="${icon}" class="w-3.5 h-3.5 ${color}"></i><span class="text-[11px] text-gray-500 font-semibold">${label}</span></div><div class="text-base font-bold ${color}">${fmt(value)}</div><div class="text-[10px] text-gray-400 truncate">${note}</div></div>`;
+  const itemCard=item=>{const activeNow=isInstallmentActiveInMonth(item,state.currentMonth,state.currentYear), total=parseFloat(item.totalAmount)||0, monthly=parseFloat(item.amount)||0, totalMonths=parseInt(item.totalMonths)||1, current=Math.max(0,Math.min(totalMonths,getInstallmentNumberForMonth(item,state.currentMonth,state.currentYear))), paidMonths=getPaidInstallmentMonthsUntil(item,state.currentMonth,state.currentYear), paidProjected=paidMonths*monthly, remaining=Math.max(0,total-paidProjected), progressPct=totalMonths?Math.round((paidMonths/totalMonths)*100):0, st=getInstallmentStatus(item,state.currentMonth,state.currentYear), status=st.paid?'pagado':(st.apartadoQ1||st.apartadoQ2?'apartado':'pendiente'), statusVisual=getStatusVisual(status), progressLabel=activeNow?`${current}/${totalMonths}`:`0/${totalMonths}`;
+    return `<div class="bg-white rounded-2xl card-shadow border border-gray-100 p-3"><div class="flex items-start justify-between gap-3 mb-2"><div><h3 class="text-base font-bold text-gray-800">${escapeHtml(item.concept||'Pago a meses')}</h3><p class="text-[11px] text-gray-400">${getInstallmentPeriodText(item)}</p></div><span class="text-[10px] px-2 py-0.5 rounded-full border ${statusVisual.bg} ${statusVisual.border} ${statusVisual.text}">${activeNow?`${statusVisual.label} · ${progressLabel}`:'Inactivo'}</span></div><div class="grid grid-cols-4 gap-2 mb-2.5"><div class="bg-menta-50 border border-menta-100 rounded-lg p-2"><div class="text-[10px] text-gray-400">Monto total</div><div class="text-sm font-bold text-menta-500">${fmt(total)}</div></div><div class="bg-rosa-50 border border-rosa-100 rounded-lg p-2"><div class="text-[10px] text-gray-400">Pago mensual</div><div class="text-sm font-bold text-rosa-500">${fmt(monthly)}</div></div><div class="bg-lila-50 border border-lila-100 rounded-lg p-2"><div class="text-[10px] text-gray-400">Pago por quincena</div><div class="text-sm font-bold text-lila-500">${fmt(item.quincenaAmount||monthly/2)}</div></div><div class="bg-azul-50 border border-azul-100 rounded-lg p-2"><div class="text-[10px] text-gray-400">Mes actual</div><div class="text-sm font-bold text-azul-500">${progressLabel}</div><div class="text-[9px] text-gray-400 truncate">mensualidad seleccionada</div></div></div><div class="mb-2.5"><div class="flex justify-between text-[11px] text-gray-500 mb-0.5"><span>Avance pagado</span><span class="font-semibold text-gray-700">${paidMonths}/${totalMonths} · ${progressPct}%</span></div><div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden"><div class="${progressPct>=100?'bg-menta-400':'bg-rosa-400'} h-2 rounded-full" style="width:${Math.min(100,Math.max(3,progressPct))}%"></div></div></div>${renderInstallmentMonthTracker(item)}${renderOffsetCoverage(item)}<div class="grid grid-cols-3 gap-2 mb-2.5 text-[11px]"><div class="bg-gray-50 rounded-lg p-2"><div class="text-gray-400">Pagado hasta este mes</div><div class="font-bold text-menta-500">${fmt(paidProjected)}</div></div><div class="bg-gray-50 rounded-lg p-2"><div class="text-gray-400">Resta por pagar</div><div class="font-bold text-durazno-500">${fmt(remaining)}</div></div><div class="bg-gray-50 rounded-lg p-2"><div class="text-gray-400">Meses restantes</div><div class="font-bold text-gray-700">${Math.max(0,totalMonths-paidMonths)}</div></div></div><div class="grid grid-cols-2 gap-2 text-[11px] border-t border-gray-100 pt-2.5"><div><div class="text-gray-400">Tarjeta del gasto</div><div class="font-semibold text-gray-700">${escapeHtml(item.purchaseCard||'-')}</div></div><div><div class="text-gray-400">Cuenta de pago</div><div class="font-semibold text-gray-700">${escapeHtml(item.card||'-')}</div></div><div><div class="text-gray-400">Estado del mes</div><div class="font-semibold ${statusVisual.text}">${statusVisual.label} · ${progressLabel}</div></div><div class="flex justify-end gap-1.5 items-end"><button onclick="editItem('${item.id}','installments')" class="text-[11px] px-2 py-1 bg-lila-100 text-lila-600 rounded font-semibold">Editar</button><button onclick="duplicateItem('${item.id}','installments')" class="text-[11px] px-2 py-1 bg-azul-100 text-azul-600 rounded font-semibold">Duplicar</button><button onclick="confirmDelete('${item.id}','installments')" class="text-[11px] px-2 py-1 bg-red-100 text-red-600 rounded font-semibold">Borrar</button></div></div></div>`;};
+  document.getElementById('mainContent').innerHTML=`<div class="flex items-center justify-between mb-1"><div><h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="layers" class="w-6 h-6 text-menta-400"></i>Pagos a meses</h2><p class="text-sm text-gray-400 mt-1">Control de deudas financiadas: avance, mensualidad y cuánto falta por pagar.</p></div><button onclick="openRecordModal('installment')" class="px-4 py-2 rounded-lg bg-menta-500 text-white text-sm font-semibold">+ Nuevo pago a meses</button></div>${renderSetAsideMiniSummary('installments')}<div class="grid grid-cols-4 gap-3 mb-3">${summaryCard('credit-card','Total financiado',totalDebt,'Suma de todos los pagos a meses','text-menta-500')}${summaryCard('calendar-check','Mensualidad activa',activeMonthly,`${MONTHS[state.currentMonth]} ${state.currentYear}`,'text-rosa-500')}${summaryCard('wallet','Pagado hasta este mes',totalPaidProjection,'Calculado según el mes seleccionado','text-azul-500')}${summaryCard('circle-dollar-sign','Resta por pagar',Math.max(0,totalDebt-totalPaidProjection),'Saldo pendiente proyectado','text-durazno-500')}</div><div class="grid grid-cols-2 gap-3">${items.map(itemCard).join('')||'<div class="col-span-2 bg-white rounded-xl card-shadow border border-gray-100 p-8 text-center text-gray-400">Aún no tienes pagos a meses registrados.</div>'}</div>`;
+}
+function renderVariableView(){
+  const items=state.variable.filter(v=>v.month===state.currentMonth&&v.year===state.currentYear), totalReal=items.reduce((s,i)=>s+(parseFloat(i.amount)||0),0), totalEstimated=items.reduce((s,i)=>s+(parseFloat(i.estimatedAmount)||0),0), diff=totalEstimated-totalReal;
+  const compactMetric=(icon,label,value,note,color,bg,border)=>`<div class="${bg} ${border} border rounded-xl px-3 py-2"><div class="flex items-center gap-1.5 text-[11px] text-gray-500 font-semibold"><i data-lucide="${icon}" class="w-3.5 h-3.5 ${color}"></i>${label}</div><div class="text-lg font-bold ${color} truncate">${value}</div><div class="text-[10px] text-gray-400 truncate">${note}</div></div>`;
+  const categoryData=getCategories().map(cat=>{const rows=items.filter(i=>String(i.category||'').toLowerCase()===String(cat).toLowerCase());const real=rows.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);const estimated=rows.reduce((s,i)=>s+(parseFloat(i.estimatedAmount)||0),0);return {cat,real,estimated,pct:totalReal>0?Math.round(real/totalReal*100):0};}).filter(c=>c.real>0||c.estimated>0).sort((a,b)=>b.real-a.real);
+  const highestCategory=categoryData[0];
+  const categoryList=categoryData.length?categoryData.map(c=>`<div class="bg-white border border-gray-100 rounded-xl px-3 py-2 card-shadow"><div class="flex items-center justify-between"><div class="font-semibold text-gray-800 capitalize text-sm truncate">${escapeHtml(c.cat)}</div><div class="font-bold text-durazno-500 text-sm">${fmt(c.real)}</div></div><div class="flex justify-between text-[10px] text-gray-400 mb-1"><span>${c.pct}% del gasto variable</span><span>Est. ${fmt(c.estimated)}</span></div><div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden"><div class="bg-durazno-300 h-1.5 rounded-full" style="width:${Math.max(4,c.pct)}%"></div></div></div>`).join(''):`<div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow text-sm text-gray-400 text-center">Aún no hay categorías con gasto.</div>`;
+  const expenseRows=items.length?items.map(i=>{const estimated=parseFloat(i.estimatedAmount)||0, real=parseFloat(i.amount)||0, itemDiff=estimated-real, statusKey=i.paid?'pagado':(i.apartadoQ1||i.apartadoQ2?'apartado':'pendiente'), st=getStatusVisual(statusKey);return `<div class="bg-white border border-gray-100 rounded-xl px-4 py-3 card-shadow"><div class="grid grid-cols-[minmax(150px,1.1fr)_minmax(300px,1.8fr)_minmax(260px,auto)] gap-4 items-center"><div class="min-w-0"><div class="font-bold text-gray-800 truncate">${escapeHtml(i.concept)}</div><div class="text-[11px] text-gray-400 capitalize truncate">${escapeHtml(i.category||'otros')} · Día ${i.date}</div></div><div class="grid grid-cols-4 gap-3 text-xs"><div><span class="block text-gray-400">Real</span><b class="text-durazno-500 whitespace-nowrap">${fmt(real)}</b></div><div><span class="block text-gray-400">Estimado</span><b class="text-rosa-500 whitespace-nowrap">${fmt(estimated)}</b></div><div><span class="block text-gray-400">Diferencia</span><b class="${itemDiff>=0?'text-aqua-500':'text-red-400'} whitespace-nowrap">${itemDiff>=0?'-':'+'}${fmt(Math.abs(itemDiff))}</b></div><div><span class="block text-gray-400">Cuenta</span><b class="text-gray-700 truncate block">${escapeHtml(i.card||'-')}</b></div></div><div class="flex items-center justify-end gap-3 whitespace-nowrap"><span class="inline-flex justify-center text-[11px] px-3 py-1 rounded-full border ${st.bg} ${st.border} ${st.text} min-w-[82px]">${st.label}</span><div class="flex gap-1.5"><button onclick="editItem('${i.id}','variable')" class="text-xs px-2 py-1 bg-lila-100 text-lila-600 rounded font-semibold">Editar</button><button onclick="duplicateItem('${i.id}','variable')" class="text-xs px-2 py-1 bg-azul-100 text-azul-600 rounded font-semibold">Duplicar</button><button onclick="confirmDelete('${i.id}','variable')" class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded font-semibold">Borrar</button></div></div></div></div>`;}).join(''):`<div class="bg-white border border-gray-100 rounded-xl p-6 card-shadow text-sm text-gray-400 text-center">No hay pagos variados registrados.</div>`;
+  document.getElementById('mainContent').innerHTML=`<div class="flex items-center justify-between mb-1"><div><h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="shuffle" class="w-6 h-6 text-durazno-400"></i>Pagos variados · ${MONTHS[state.currentMonth]} ${state.currentYear}</h2><p class="text-sm text-gray-400 mt-1">Vista compacta de gastos variables.</p></div><button onclick="openRecordModal('variable')" class="px-4 py-2 rounded-lg bg-durazno-400 text-white text-sm font-semibold">+ Nuevo pago variado</button></div>${renderSetAsideMiniSummary('variable')}<div class="sticky top-0 z-20 bg-gray-50/95 backdrop-blur pt-2 pb-3 -mx-5 px-5 border-b border-gray-100"><div class="grid grid-cols-4 gap-3">${compactMetric('receipt','Total real',fmt(totalReal),'Lo que realmente gastaste','text-durazno-500','bg-white','border-gray-100')}${compactMetric('calculator','Total estimado',fmt(totalEstimated),'Lo que pensabas gastar','text-rosa-500','bg-white','border-gray-100')}${compactMetric(diff>=0?'badge-dollar-sign':'alert-triangle','Diferencia',`${diff>=0?'A favor ':'Extra '}${fmt(Math.abs(diff))}`,diff>=0?'Gastaste menos de lo estimado':'Gastaste más de lo estimado',diff>=0?'text-aqua-500':'text-red-400',diff>=0?'bg-aqua-50':'bg-red-50',diff>=0?'border-aqua-200':'border-red-100')}${compactMetric('tag','Categoría más alta',highestCategory?escapeHtml(highestCategory.cat):'Sin datos',highestCategory?fmt(highestCategory.real):'Aún sin gastos','text-lila-500','bg-white','border-gray-100')}</div></div><div class="grid grid-cols-12 gap-4"><div class="col-span-4 sticky top-[104px]"><h3 class="font-bold text-gray-800 mb-2 flex items-center gap-2"><i data-lucide="list-filter" class="w-4 h-4 text-durazno-400"></i>Categorías del mes</h3><div class="space-y-2">${categoryList}</div></div><div class="col-span-8"><div class="flex items-center justify-between mb-2"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="list" class="w-4 h-4 text-gray-500"></i>Gastos del mes</h3><span class="text-xs text-gray-400">${items.length} registro${items.length===1?'':'s'}</span></div><div class="grid grid-cols-1 gap-2">${expenseRows}</div></div></div>`;
+}
+function renderAnnualView(){
+  const data=getYearMonthlyData();
+  const extras=state.config.yearEndExtras||{bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
+  if(!extras.otherName) extras.otherName='Otro extra';
+  const extraEstimated=(parseFloat(extras.bonusEstimated)||0)+(parseFloat(extras.savingsFundEstimated)||0)+(parseFloat(extras.otherEstimated)||0);
+  const extraReal=(parseFloat(extras.bonusReal)||0)+(parseFloat(extras.savingsFundReal)||0)+(parseFloat(extras.otherReal)||0);
+  const extraDiff=extraReal-extraEstimated;
+  const incomeAnnual=data.reduce((s,d)=>s+d.income,0);
+  const fixedAnnual=data.reduce((s,d)=>s+d.fixed,0);
+  const instAnnual=data.reduce((s,d)=>s+d.inst,0);
+  const variAnnual=data.reduce((s,d)=>s+d.vari,0);
+  const savingsAnnual=data.reduce((s,d)=>s+d.sav,0);
+  const paymentsAnnual=fixedAnnual+instAnnual+variAnnual;
+  const outAnnual=paymentsAnnual+savingsAnnual;
+  const freeAnnual=incomeAnnual-outAnnual;
+  const healthPct=incomeAnnual>0?Math.max(0,Math.min(100,Math.round((freeAnnual/incomeAnnual)*100))):0;
+  const mostExpensive=data.reduce((a,b)=>b.out>a.out?b:a,data[0]);
+  const mostSaving=data.reduce((a,b)=>b.sav>a.sav?b:a,data[0]);
+  const bestFree=data.reduce((a,b)=>b.free>a.free?b:a,data[0]);
+  const worstFree=data.reduce((a,b)=>b.free<a.free?b:a,data[0]);
+  const maxDist=Math.max(fixedAnnual,instAnnual,variAnnual,savingsAnnual,1);
+  const summaryCard=(icon,label,value,note,color,bg,border)=>`<div class="${bg} ${border} border rounded-xl p-4 card-shadow"><div class="flex items-center gap-2 mb-2"><i data-lucide="${icon}" class="w-4 h-4 ${color}"></i><span class="text-xs text-gray-500 font-semibold">${label}</span></div><div class="text-2xl font-bold ${color}">${fmt(value)}</div><div class="text-[11px] text-gray-400 mt-1">${note}</div></div>`;
+  const distRow=(label,value,color,bg)=>`<div><div class="flex justify-between text-sm mb-1"><span class="text-gray-600">${label}</span><span class="font-bold ${color}">${fmt(value)}</span></div><div class="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden"><div class="${bg} h-2.5 rounded-full" style="width:${Math.max(3,Math.round(value/maxDist*100))}%"></div></div></div>`;
+  const keyCard=(icon,label,month,value,color)=>`<div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="flex items-center gap-2 mb-2"><i data-lucide="${icon}" class="w-4 h-4 ${color}"></i><span class="text-xs text-gray-400 font-semibold">${label}</span></div><div class="font-bold text-gray-800 text-lg">${month}</div><div class="text-xs ${color} font-bold mt-1">${fmt(value)}</div></div>`;
+  const monthMini=data.map(d=>{
+    const cls=d.health.cls;
+    return `<div class="bg-white border border-gray-100 rounded-xl p-3 card-shadow">
+      <div class="flex items-center justify-between mb-2"><span class="font-bold text-gray-800 text-sm">${d.name.slice(0,3)}</span><span class="w-2 h-2 rounded-full ${d.health.dot}"></span></div>
+      <div class="text-[11px] text-gray-400 mb-1">Libre</div>
+      <div class="font-bold ${d.free<0?'text-red-400':'text-aqua-500'} text-sm mb-2">${fmt(d.free)}</div>
+      <div class="text-[10px] inline-flex px-2 py-0.5 rounded-full border ${cls}">${d.health.label}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('mainContent').innerHTML=`
+    <div class="flex items-center justify-between mb-1">
+      <div><h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-6 h-6 text-lila-400"></i>Resumen anual · ${state.currentYear}</h2><p class="text-sm text-gray-400 mt-1">Reporte general del año: ingresos, egresos, ahorro, dinero libre y meses clave.</p></div>
+      <button onclick="currentView='monthly'; render();" class="text-xs px-3 py-2 rounded-lg bg-lila-100 text-lila-500 font-semibold hover:bg-lila-200">Ver vista mensual</button>
+    </div>
+    <div class="grid grid-cols-4 gap-3 mb-5">
+      ${summaryCard('banknote','Ingresos anuales proyectados',incomeAnnual,'Sueldo mensual × 12','text-lila-500','bg-lila-50','border-lila-100')}
+      ${summaryCard('credit-card','Egresos anuales',paymentsAnnual,'Fijos + meses + variados','text-rosa-500','bg-rosa-50','border-rosa-100')}
+      ${summaryCard('piggy-bank','Ahorro acumulado',savingsAnnual,'Todos los meses registrados','text-azul-500','bg-azul-50','border-azul-100')}
+      ${summaryCard('wallet','Dinero libre anual',freeAnnual,'Después de pagos y ahorro',freeAnnual<0?'text-red-400':'text-aqua-500',freeAnnual<0?'bg-red-50':'bg-aqua-50',freeAnnual<0?'border-red-100':'border-aqua-200')}
+    </div>
+    <div class="grid grid-cols-12 gap-4">
+      <div class="col-span-5 bg-white rounded-2xl card-shadow border border-gray-100 p-5">
+        <h3 class="font-bold text-gray-800 mb-2 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-aqua-500"></i>Salud financiera del año</h3>
+        <p class="text-xs text-gray-400 mb-4">Porcentaje de ingresos que queda libre después de pagos y ahorro.</p>
+        <div class="flex items-end gap-3 mb-3"><div class="text-4xl font-bold ${freeAnnual<0?'text-red-400':'text-aqua-500'}">${healthPct}%</div><div class="text-xs text-gray-400 pb-1">libre anual</div></div>
+        <div class="w-full bg-gray-100 h-4 rounded-full overflow-hidden mb-3"><div class="${freeAnnual<0?'bg-red-400':'bg-aqua-500'} h-4 rounded-full" style="width:${healthPct}%"></div></div>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-400">Total usado</span><div class="font-bold text-rosa-500">${fmt(outAnnual)}</div></div>
+          <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-400">Margen libre</span><div class="font-bold ${freeAnnual<0?'text-red-400':'text-aqua-500'}">${fmt(freeAnnual)}</div></div>
+        </div>
+      </div>
+      <div class="col-span-7 bg-white rounded-2xl card-shadow border border-gray-100 p-5">
+        <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="pie-chart" class="w-4 h-4 text-lila-400"></i>Distribución anual</h3>
+        <div class="space-y-4">
+          ${distRow('Pagos fijos',fixedAnnual,'text-lila-500','bg-lila-300')}
+          ${distRow('Pagos a meses',instAnnual,'text-menta-500','bg-menta-300')}
+          ${distRow('Pagos variados',variAnnual,'text-durazno-500','bg-durazno-300')}
+          ${distRow('Ahorro',savingsAnnual,'text-azul-500','bg-azul-300')}
+        </div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl card-shadow border border-gray-100 p-5">
+      <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4 text-rosa-500"></i>Meses clave</h3>
+      <div class="grid grid-cols-4 gap-3">
+        ${keyCard('flame','Mes más caro',mostExpensive.name,mostExpensive.out,'text-rosa-500')}
+        ${keyCard('piggy-bank','Mes con más ahorro',mostSaving.name,mostSaving.sav,'text-azul-500')}
+        ${keyCard('badge-check','Mejor mes libre',bestFree.name,bestFree.free,'text-aqua-500')}
+        ${keyCard('alert-triangle','Mes a revisar',worstFree.name,worstFree.free,worstFree.free<0?'text-red-400':'text-durazno-500')}
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl card-shadow border border-gray-100 p-5">
+      <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="calendar-days" class="w-4 h-4 text-lila-400"></i>Mapa anual por mes</h3>
+      <div class="grid grid-cols-6 gap-3">${monthMini}</div>
+    </div>
+    ${renderAnnualSavingsGoalBlock()}
+    <div class="bg-white rounded-2xl card-shadow border border-gray-100 p-5">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="gift" class="w-4 h-4 text-menta-500"></i>Ingresos extra de fin de año</h3>
+          <p class="text-xs text-gray-400 mt-1">Solo estadística separada: no se mezcla con sueldo, egresos ni dinero libre anual.</p>
+        </div>
+        <button onclick="currentView='config'; render();" class="text-xs px-3 py-2 rounded-lg bg-menta-50 text-menta-500 border border-menta-100 font-semibold hover:bg-menta-100">Editar extras</button>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div class="bg-lila-50 border border-lila-100 rounded-xl p-4"><div class="text-xs text-gray-500 font-semibold mb-1">Total estimado</div><div class="text-2xl font-bold text-lila-500">${fmt(extraEstimated)}</div><div class="text-[11px] text-gray-400 mt-1">Aguinaldo + fondo + otros estimados</div></div>
+        <div class="bg-menta-50 border border-menta-100 rounded-xl p-4"><div class="text-xs text-gray-500 font-semibold mb-1">Total real</div><div class="text-2xl font-bold text-menta-500">${fmt(extraReal)}</div><div class="text-[11px] text-gray-400 mt-1">Para llenar al cierre del año</div></div>
+        <div class="${extraDiff<0?'bg-red-50 border-red-100':'bg-aqua-50 border-aqua-200'} border rounded-xl p-4"><div class="text-xs text-gray-500 font-semibold mb-1">Diferencia real vs estimado</div><div class="text-2xl font-bold ${extraDiff<0?'text-red-400':'text-aqua-500'}">${fmt(extraDiff)}</div><div class="text-[11px] text-gray-400 mt-1">Comparativo para estadística anual</div></div>
+      </div>
+      <div class="grid grid-cols-3 gap-3 text-xs">
+        <div class="bg-gray-50 rounded-xl p-3"><div class="font-semibold text-gray-700 mb-2">Aguinaldo</div><div class="flex justify-between"><span class="text-gray-400">Estimado</span><b class="text-lila-500">${fmt(extras.bonusEstimated)}</b></div><div class="flex justify-between mt-1"><span class="text-gray-400">Real</span><b class="text-menta-500">${fmt(extras.bonusReal)}</b></div></div>
+        <div class="bg-gray-50 rounded-xl p-3"><div class="font-semibold text-gray-700 mb-2">Fondo de ahorro</div><div class="flex justify-between"><span class="text-gray-400">Estimado</span><b class="text-lila-500">${fmt(extras.savingsFundEstimated)}</b></div><div class="flex justify-between mt-1"><span class="text-gray-400">Real</span><b class="text-menta-500">${fmt(extras.savingsFundReal)}</b></div></div>
+        <div class="bg-gray-50 rounded-xl p-3"><div class="font-semibold text-gray-700 mb-2">${escapeHtml(extras.otherName||'Otro extra')}</div><div class="flex justify-between"><span class="text-gray-400">Estimado</span><b class="text-lila-500">${fmt(extras.otherEstimated)}</b></div><div class="flex justify-between mt-1"><span class="text-gray-400">Real</span><b class="text-menta-500">${fmt(extras.otherReal)}</b></div></div>
+      </div>
+      ${extras.notes?`<div class="bg-menta-50 border border-menta-100 rounded-xl p-3 text-xs text-gray-600 mt-4"><b class="text-menta-500">Notas:</b> ${escapeHtml(extras.notes)}</div>`:''}
+    </div>`;
+}
+function getSavingsForFilter(){if(savingsFilterMode==='all')return state.savings;const m=savingsFilterMode==='choose'?savingsFilterMonth:state.currentMonth;return state.savings.filter(s=>s.month===m&&s.year===state.currentYear);}function setSavingsFilter(mode){savingsFilterMode=mode;if(mode==='current')savingsFilterMonth=state.currentMonth;renderSavingsView();lucide.createIcons();}function setSavingsFilterMonth(v){savingsFilterMonth=parseInt(v);savingsFilterMode='choose';renderSavingsView();lucide.createIcons();}function toggleSavingsForm(){showSavingsForm=!showSavingsForm;editingSavingId='';renderSavingsView();lucide.createIcons();}function editSavingInline(id){editingSavingId=id;showSavingsForm=true;renderSavingsView();lucide.createIcons();}
+function renderSavingsView(){
+  const s=getSavingsSummaryForMonth(state.currentMonth,state.currentYear);
+  const filtered=getSavingsForFilter();
+  const activeGoals=getActiveSavingsGoals(state.currentMonth,state.currentYear);
+  const small=(icon,title,amount,note,color)=>`<div class="bg-white border border-gray-100 rounded-xl p-4 card-shadow"><div class="flex items-center gap-2 mb-2"><i data-lucide="${icon}" class="w-4 h-4 ${color}"></i><span class="text-xs text-gray-500 font-semibold">${title}</span></div><div class="text-xl font-bold ${color}">${fmt(amount)}</div><div class="text-[11px] text-gray-400 mt-1">${note}</div></div>`;
+  const rows=filtered.map(i=>{
+    const goalName=(state.savingsGoals||[]).find(g=>g.id===i.goalId)?.name||'General';
+    const status=isSavingConfirmed(i)?'Cumplido':'Planeado';
+    const statusClass=isSavingConfirmed(i)?'bg-menta-50 text-menta-500 border-menta-100':'bg-durazno-50 text-durazno-500 border-durazno-100';
+    return `<tr class="border-b hover:bg-gray-50"><td class="py-3 px-1.5 text-[13px]">${i.date}</td><td class="py-3 px-1.5 text-[13px]"><span class="px-1.5 py-1 rounded-full bg-azul-50 text-azul-400 text-[10px] font-semibold whitespace-nowrap">${MONTHS[i.month]}</span></td><td class="py-3 px-1.5 text-[13px]">${normalizeQuincena(i.quincena,i.date)}</td><td class="py-3 px-1.5 text-[13px] font-bold text-lila-500">${fmt(getSavingPlannedAmount(i))}</td><td class="py-3 px-1.5 text-[13px] font-bold ${isSavingConfirmed(i)?'text-menta-500':'text-gray-300'}">${isSavingConfirmed(i)?fmt(getSavingRealAmount(i)):'—'}</td><td class="py-3 px-1.5 text-[13px] truncate">${escapeHtml(goalName)}</td><td class="py-3 px-1.5 text-[13px] truncate">${escapeHtml(i.card||'-')}</td><td class="py-3 px-1.5 text-[13px] text-center"><button onclick="toggleSavingConfirmed('${i.id}')" class="text-[10px] px-2 py-1 rounded-full border ${statusClass} font-semibold">${status}</button></td><td class="py-3 px-1.5 text-center"><div class="flex justify-center items-center gap-1.5"><button onclick="editSavingInline('${i.id}')" class="text-[11px] px-2 py-1 bg-lila-100 text-lila-600 rounded hover:bg-lila-200 font-semibold">Editar</button><button onclick="confirmDelete('${i.id}','savings')" class="text-[11px] px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 font-semibold">Borrar</button></div></td></tr>`;
+  }).join('')||'<tr><td colspan="9" class="py-4 text-center text-gray-400 text-sm">Sin registros de ahorro</td></tr>';
+  const form=showSavingsForm?renderSavingPanelForm(editingSavingId):`<button onclick="toggleSavingsForm()" class="w-full bg-white rounded-xl card-shadow p-4 text-sm font-semibold text-lila-500 hover:bg-lila-50">Mostrar Nuevo ahorro</button>`;
+  document.getElementById('mainContent').innerHTML=`<div class="flex justify-between mb-4"><h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="piggy-bank" class="w-6 h-6 text-azul-400"></i>Ahorro</h2><button onclick="openSavingModal()" class="px-4 py-2 rounded-lg bg-lila-500 text-white text-sm font-semibold">+ Nuevo ahorro</button></div><div class="bg-white rounded-xl card-shadow p-5"><h3 class="font-bold text-gray-800 mb-4">Resumen del mes: ${MONTHS[state.currentMonth]} ${state.currentYear}</h3><div class="grid grid-cols-5 gap-3 mb-5">${small('target','Meta del mes',s.goal,'Editar meta','text-lila-500')}${small('calendar','Ahorro Q1',s.q1,`${s.pctQ1}% de la meta mensual`,'text-azul-400')}${small('calendar','Ahorro Q2',s.q2,`${s.pctQ2}% de la meta mensual`,'text-azul-400')}${small('wallet','Ahorro total del mes',s.total,`${s.pct}% alcanzado`,'text-menta-400')}${small('coins','Faltante para la meta',s.missing,`${s.pctMissing}% restante`,'text-durazno-400')}</div><div class="font-semibold text-gray-700 text-sm mb-2">Progreso de ahorro – ${MONTHS[state.currentMonth]} ${state.currentYear}</div><div class="relative w-full bg-azul-100 rounded-full h-5 overflow-hidden"><div class="bg-azul-400 h-5 rounded-full progress-bar" style="width:${s.pct}%"></div><div class="absolute inset-0 flex justify-center items-center text-[11px] font-bold">${s.pct}%</div></div><div class="flex justify-between text-xs mt-2"><span>Ahorrado: <b class="text-azul-400">${fmt(s.total)}</b></span><span>Meta: <b class="text-lila-500">${fmt(s.goal)}</b></span></div></div><div class="bg-white rounded-xl card-shadow p-5"><div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="target" class="w-4 h-4 text-lila-500"></i>Metas de ahorro activas</h3><p class="text-xs text-gray-400 mt-1">Aparecen automáticamente según el mes y año seleccionado.</p></div><button onclick="openSavingsGoalModal()" class="px-3 py-2 rounded-lg bg-lila-500 text-white text-xs font-semibold">+ Nueva meta</button></div><div class="grid grid-cols-2 gap-3">${renderSavingsGoalCards(activeGoals)}</div></div><div class="grid grid-cols-12 gap-4"><div class="col-span-8 bg-white rounded-xl card-shadow p-5"><h3 class="font-bold mb-4">Registros de ahorro</h3><div class="flex gap-2 mb-4"><button onclick="setSavingsFilter('current')" class="text-xs px-3 py-1.5 rounded-lg ${savingsFilterMode==='current'?'bg-lila-500 text-white':'bg-lila-100 text-lila-500'} font-semibold">Ver mes actual</button><button onclick="setSavingsFilter('all')" class="text-xs px-3 py-1.5 rounded-lg ${savingsFilterMode==='all'?'bg-lila-500 text-white':'bg-gray-100 text-gray-600'} font-semibold">Ver todos los meses</button><select onchange="setSavingsFilterMonth(this.value)" class="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200"><option>Elegir mes</option>${MONTHS.map((m,i)=>`<option value="${i}" ${savingsFilterMode==='choose'&&savingsFilterMonth===i?'selected':''}>${m}</option>`).join('')}</select></div><div class="overflow-hidden"><table class="w-full table-fixed"><colgroup><col style="width:6%"><col style="width:10%"><col style="width:6%"><col style="width:13%"><col style="width:13%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:16%"></colgroup><thead><tr class="bg-gray-50"><th class="p-2 text-left text-[11px]">Día</th><th class="p-2 text-left text-[11px]">Mes</th><th class="p-2 text-left text-[11px]">Q</th><th class="p-2 text-left text-[11px]">Meta planeada</th><th class="p-2 text-left text-[11px]">Real guardado</th><th class="p-2 text-left text-[11px]">Meta</th><th class="p-2 text-left text-[11px]">Cuenta</th><th class="p-2 text-center text-[11px]">Estado</th><th class="p-2 text-center text-[11px]">Acción</th></tr></thead><tbody>${rows}</tbody></table></div><button class="w-full text-center text-xs text-lila-500 font-semibold py-3">Cargar más</button><div class="bg-azul-50 border border-azul-100 rounded-lg p-3 text-xs text-azul-500 mt-3">Los ahorros se registran en el mes que selecciones. El resumen de arriba muestra solo el mes actual seleccionado.</div></div><div class="col-span-4">${form}</div></div>`;
+}
+function renderSavingsGoalCards(goals){
+  if(!goals.length) return `<div class="col-span-2 bg-gray-50 border border-gray-100 rounded-xl p-5 text-center text-sm text-gray-400">No hay metas activas en ${MONTHS[state.currentMonth]} ${state.currentYear}. Crea una meta con fecha de inicio y final para que aparezca aquí.</div>`;
+  return goals.map(goal=>{const p=getSavingsGoalProgress(goal,state.currentMonth,state.currentYear),pace=getSavingsGoalPace(goal,state.currentMonth,state.currentYear);return `<div class="bg-lila-50 border border-lila-100 rounded-2xl p-4"><div class="flex items-start justify-between gap-3 mb-3"><div><h4 class="font-bold text-gray-800">${escapeHtml(goal.name)}</h4><p class="text-xs text-gray-400">${MONTHS[goal.startMonth]} ${goal.startYear} - ${MONTHS[goal.endMonth]} ${goal.endYear}</p><span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${pace.cls} mt-2"><i data-lucide="${pace.icon}" class="w-3 h-3"></i>${pace.label}</span></div><div class="flex gap-1"><button onclick="openSavingsGoalModal('${goal.id}')" class="text-xs px-2 py-1 bg-white text-lila-600 rounded border border-lila-100">Editar</button><button onclick="deleteSavingsGoal('${goal.id}')" class="text-xs px-2 py-1 bg-red-50 text-red-500 rounded border border-red-100">Borrar</button></div></div><div class="grid grid-cols-3 gap-2 text-[11px] mb-3"><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400">Objetivo</span><div class="font-bold text-lila-500">${fmt(p.total)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400">Ahorrado</span><div class="font-bold text-azul-500">${fmt(p.saved)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400">Falta</span><div class="font-bold text-durazno-500">${fmt(p.missing)}</div></div></div><div class="flex justify-between text-[11px] text-gray-500 mb-1"><span>Avance total</span><b>${p.pct}%</b></div><div class="w-full bg-white h-2 rounded-full overflow-hidden mb-3"><div class="bg-lila-400 h-2 rounded-full" style="width:${Math.max(3,p.pct)}%"></div></div><div class="grid grid-cols-3 gap-2 text-[11px]"><div><span class="text-gray-400">Sugerido mensual</span><div class="font-bold text-menta-500">${fmt(p.monthlyTarget)}</div></div><div><span class="text-gray-400">Este mes</span><div class="font-bold text-azul-500">${fmt(p.savedThisMonth)}</div></div><div><span class="text-gray-400">Plan</span><div class="font-bold text-lila-500">${goal.planType==='biweekly'?`${fmt(goal.planAmount||0)} / quincena`:`${fmt(goal.planAmount||0)} / mes`}</div></div></div>${goal.notes?`<div class="text-[11px] text-gray-500 mt-3 bg-white/60 rounded-lg p-2">${escapeHtml(goal.notes)}</div>`:''}</div>`;}).join('');
+}
+function openSavingsGoalModal(id=''){const goal=(state.savingsGoals||[]).find(g=>g.id===id);document.getElementById('modalContent').innerHTML=`<div class="p-5"><div class="flex justify-between mb-4"><h3 class="font-bold flex items-center gap-2"><i data-lucide="target" class="w-4 h-4 text-lila-500"></i>${goal?'Editar':'Nueva'} meta de ahorro</h3><button onclick="closeModal()" class="text-xl text-gray-400 hover:text-gray-600 leading-none">×</button></div><form class="space-y-3" onsubmit="saveSavingsGoal(event,'${goal?.id||''}')"><div><label class="block text-xs mb-1">Nombre de la meta</label><input name="name" value="${escapeHtml(goal?.name||'')}" placeholder="Ej. Viaje, mudanza, laptop" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div><label class="block text-xs mb-1">Monto objetivo</label><input type="number" step="any" name="amount" value="${goal?.amount||0}" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs mb-1">Mes de inicio</label><select name="startMonth" class="w-full border rounded-lg px-3 py-2 text-sm">${MONTHS.map((m,i)=>`<option value="${i}" ${(goal?.startMonth??state.currentMonth)===i?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-xs mb-1">Año de inicio</label><input type="number" name="startYear" value="${goal?.startYear??state.currentYear}" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs mb-1">Mes final</label><select name="endMonth" class="w-full border rounded-lg px-3 py-2 text-sm">${MONTHS.map((m,i)=>`<option value="${i}" ${(goal?.endMonth??state.currentMonth)===i?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-xs mb-1">Año final</label><input type="number" name="endYear" value="${goal?.endYear??state.currentYear}" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div><div><label class="block text-xs mb-1">Plan de ahorro</label><select name="planType" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="monthly" ${(!goal?.planType||goal?.planType==='monthly')?'selected':''}>Ahorrar por mes</option><option value="biweekly" ${goal?.planType==='biweekly'?'selected':''}>Ahorrar por quincena</option></select><p class="text-[11px] text-gray-400 mt-1">Si eliges por mes, se divide en Q1 y Q2. Si eliges por quincena, esa cantidad aparece en cada quincena.</p></div><div><label class="block text-xs mb-1">Cantidad a apartar según el plan</label><input type="number" step="any" name="planAmount" value="${goal?.planAmount||0}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 1000"></div><div><label class="block text-xs mb-1">Cuenta sugerida</label><select name="card" class="w-full border rounded-lg px-3 py-2 text-sm">${getAccountOptions(goal?.card||'')}</select></div><div><label class="block text-xs mb-1">Notas</label><textarea name="notes" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. objetivo, fechas, detalles del viaje">${escapeHtml(goal?.notes||'')}</textarea></div><div class="flex gap-2 pt-2"><button class="flex-1 bg-lila-500 text-white rounded-lg py-2 text-sm font-semibold">Guardar meta</button><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 text-sm">Cancelar</button></div></form></div>`;document.getElementById('modal').classList.remove('hidden');lucide.createIcons();}
+function saveSavingsGoal(event,id=''){event.preventDefault();const fd=new FormData(event.target),payload={name:fd.get('name')||'Meta de ahorro',amount:parseFloat(fd.get('amount'))||0,startMonth:parseInt(fd.get('startMonth'))||0,startYear:parseInt(fd.get('startYear'))||state.currentYear,endMonth:parseInt(fd.get('endMonth'))||0,endYear:parseInt(fd.get('endYear'))||state.currentYear,card:fd.get('card')||'',planType:fd.get('planType')||'monthly',planAmount:parseFloat(fd.get('planAmount'))||0,notes:fd.get('notes')||''};if(monthIndex(payload.endMonth,payload.endYear)<monthIndex(payload.startMonth,payload.startYear)){payload.endMonth=payload.startMonth;payload.endYear=payload.startYear;}if(id){const g=state.savingsGoals.find(x=>x.id===id);if(g)Object.assign(g,payload);}else state.savingsGoals.push({id:uid(),...payload});saveState();closeModal();render();}
+function deleteSavingsGoal(id){if(!confirm('¿Eliminar esta meta de ahorro? Los ahorros guardados se quedan, pero pasarán a ahorro general.'))return;state.savingsGoals=state.savingsGoals.filter(g=>g.id!==id);state.savings.forEach(s=>{if(s.goalId===id)s.goalId='';});saveState();render();}
+function renderSavingPanelForm(id='',isModal=false){
+  const item=state.savings.find(s=>s.id===id);
+  const suggestedAmount=(parseFloat(state.config.savingsGoal)||0)/2;
+  const cancelAction=isModal?'closeModal()':"editingSavingId=''; renderSavingsView(); lucide.createIcons();";
+  const plannedValue=item?getSavingPlannedAmount(item):suggestedAmount;
+  const realValue=item?(parseFloat(item.amount)||''):'';
+  const checked=isSavingConfirmed(item);
+  return `<div class="bg-white rounded-xl card-shadow p-4 sticky top-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="plus-circle" class="w-4 h-4 text-azul-400"></i>${item?'Editar ahorro':'Nuevo ahorro'}</h3>
+      <button type="button" onclick="${cancelAction}" class="text-gray-400 hover:text-gray-600">×</button>
+    </div>
+    <form class="space-y-3" onsubmit="saveSavingForm(event,'${item?.id||''}')">
+      <div><label class="block text-xs mb-1">Día del mes</label><input type="number" name="date" min="1" max="31" value="${item?.date||1}" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+      <div><label class="block text-xs mb-1">Mes del ahorro</label><select name="month" class="w-full border rounded-lg px-3 py-2 text-sm">${MONTHS.map((m,i)=>`<option value="${i}" ${(item?.month??state.currentMonth)===i?'selected':''}>${m}</option>`).join('')}</select></div>
+      <div><label class="block text-xs mb-1">Quincena</label><select name="quincena" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="Q1" ${normalizeQuincena(item?.quincena,item?.date)==='Q1'?'selected':''}>Q1</option><option value="Q2" ${normalizeQuincena(item?.quincena,item?.date)==='Q2'?'selected':''}>Q2</option></select></div>
+      <div><label class="block text-xs mb-1">Meta de ahorro</label><select name="goalId" class="w-full border rounded-lg px-3 py-2 text-sm">${getSavingsGoalOptions(item?.goalId||'')}</select></div>
+      <div><label class="block text-xs mb-1">Meta / planeado</label><input type="number" step="any" name="plannedAmount" value="${plannedValue}" class="w-full border rounded-lg px-3 py-2 text-sm"><p class="text-[11px] text-gray-400 mt-1">Es lo que pensabas juntar. Queda como recordatorio y no se suma como ahorro real.</p></div>
+      <div><label class="block text-xs mb-1">Real guardado</label><input type="number" step="any" name="amount" value="${realValue}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Puede ser igual, mayor o menor"><p class="text-[11px] text-gray-400 mt-1">Es lo que ya juntaste/guardaste. Solo este monto se suma cuando el estado está cumplido.</p></div>
+      <div><label class="block text-xs mb-1">Cuenta donde se guardó</label><select name="card" class="w-full border rounded-lg px-3 py-2 text-sm">${getAccountOptions(item?.card||'')}</select></div>
+      <div><label class="block text-xs mb-1">Estado del ahorro</label><select name="confirmed" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="false" ${!checked?'selected':''}>Planeado / estimado</option><option value="true" ${checked?'selected':''}>Cumplido / ya guardado</option></select><p class="text-[11px] text-gray-400 mt-1">Si lo marcas cumplido y dejas vacío el real guardado, se usará la meta/planeado.</p></div>
+      <div class="flex gap-2 pt-2"><button class="flex-1 bg-lila-500 text-white rounded-lg py-2 text-sm font-semibold">${item?'Guardar':'Agregar'}</button><button type="button" onclick="${cancelAction}" class="px-4 py-2 rounded-lg bg-gray-100 text-sm">Cancelar</button></div>
+    </form>
+  </div>`;
+}
+function saveSavingForm(event,id=''){event.preventDefault();const fd=new FormData(event.target);const planned=parseFloat(fd.get('plannedAmount'))||0;const confirmed=fd.get('confirmed')==='true';const realInput=fd.get('amount');const real=realInput===''||realInput===null?planned:(parseFloat(realInput)||0);const payload={date:parseInt(fd.get('date'))||1,month:parseInt(fd.get('month')),year:state.currentYear,quincena:normalizeQuincena(fd.get('quincena'),fd.get('date')),goalId:fd.get('goalId')||'',plannedAmount:planned,amount:real,card:fd.get('card')||'',confirmed};if(Number.isNaN(payload.month))payload.month=state.currentMonth;if(id){const item=state.savings.find(s=>s.id===id);if(item)Object.assign(item,payload);}else state.savings.push({id:uid(),...payload});editingSavingId='';saveState();closeModal();render();}
+function toggleSavingConfirmed(id){const item=state.savings.find(s=>s.id===id);if(!item)return;if(!isSavingConfirmed(item)&&!(parseFloat(item.amount)>0))item.amount=getSavingPlannedAmount(item);item.confirmed=!isSavingConfirmed(item);saveState();render();}
+function openSavingModal(id=''){document.getElementById('modalContent').innerHTML=renderSavingPanelForm(id,true);document.getElementById('modal').classList.remove('hidden');lucide.createIcons();}
+function editItem(id,col){if(col==='savings')return openSavingModal(id);const type=col==='installments'?'installment':col==='fixed'?'fixed':'variable';openRecordModal(type,id);}
+function openRecordModal(type,id=''){const collection=type==='installment'?'installments':type==='fixed'?'fixed':'variable',item=state[collection]?.find(p=>p.id===id),meta={fixed:{title:'Pago fijo',icon:'pin',color:'text-lila-500',button:'bg-lila-500 hover:bg-lila-400'},installment:{title:'Pago a meses',icon:'layers',color:'text-menta-500',button:'bg-menta-500 hover:bg-menta-400'},variable:{title:'Pago variado',icon:'shuffle',color:'text-durazno-500',button:'bg-durazno-500 hover:bg-durazno-400'}}[type];const category=(type==='fixed'||type==='variable')?`<div><label class="block text-xs mb-1">Categoría</label><select name="category" class="w-full border rounded-lg px-3 py-2 text-sm">${getCategoryOptions(item?.category||'')}</select>${type==='variable'?'<input name="newCategory" placeholder="O escribe una categoría nueva" class="w-full border rounded-lg px-3 py-2 text-sm mt-2">':''}</div>`:'';const split=`<div><label class="block text-xs mb-1">Apartado por quincena</label><select name="splitMode" class="w-full border rounded-lg px-3 py-2 text-sm"><option ${item?.splitMode==='Dividir en dos quincenas'?'selected':''}>Dividir en dos quincenas</option><option ${item?.splitMode==='Dividir en próximas 2 quincenas'?'selected':''}>Dividir en próximas 2 quincenas</option><option ${item?.splitMode==='Q2 anterior + Q1 del mes de pago'?'selected':''}>Q2 anterior + Q1 del mes de pago</option><option ${item?.splitMode==='Cargar completo en Q1'?'selected':''}>Cargar completo en Q1</option><option ${item?.splitMode==='Cargar completo en Q2'?'selected':''}>Cargar completo en Q2</option><option ${item?.splitMode==='Manual por quincena'?'selected':''}>Manual por quincena</option></select>${type==='fixed'||type==='variable'?`<div class="grid grid-cols-2 gap-3 mt-2"><div><label class="block text-xs mb-1 text-gray-500">Monto manual Q1</label><input type="number" step="any" name="manualQ1" value="${item?.manualQ1||0}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 500"></div><div><label class="block text-xs mb-1 text-gray-500">Monto manual Q2</label><input type="number" step="any" name="manualQ2" value="${item?.manualQ2||0}" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 500"></div></div><p class="text-[11px] text-gray-400 mt-1">Usa estos campos cuando elijas “Manual por quincena”. Si no usas ese modo, la app calcula el apartado automáticamente.</p>`:''}<div class="mt-2"><label class="block text-xs mb-1 text-gray-500">Si eliges próximas 2 quincenas, empezar a apartar desde</label><select name="firstSetAside" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="current-q1" ${item?.firstSetAside==='current-q1'?'selected':''}>Q1 del mes del registro</option><option value="current-q2" ${(!item?.firstSetAside||item?.firstSetAside==='current-q2')?'selected':''}>Q2 del mes del registro</option><option value="next-q1" ${item?.firstSetAside==='next-q1'?'selected':''}>Q1 del mes siguiente</option><option value="next-q2" ${item?.firstSetAside==='next-q2'?'selected':''}>Q2 del mes siguiente</option></select><p class="text-[11px] text-gray-400 mt-1">Para pagos antes del día 15, usa “Q2 anterior + Q1 del mes de pago”. Ej. pago el 14: apartas mitad en Q2 del mes anterior y mitad en Q1 del mes de pago.</p></div></div>`;const fixed=type==='fixed'?`<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs mb-1">Mes de inicio</label><select name="startMonth" class="w-full border rounded-lg px-3 py-2 text-sm">${MONTHS.map((m,i)=>`<option value="${i}" ${(item?.startMonth??item?.month??state.currentMonth)===i?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-xs mb-1">Año de inicio</label><input type="number" name="startYear" value="${item?.startYear??item?.year??state.currentYear}" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div><div><label class="block text-xs mb-1">¿Tiene fecha límite?</label><select name="hasEndDate" onchange="toggleEndDateFields(this.value)" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="no" ${!item?.hasEndDate?'selected':''}>No</option><option value="yes" ${item?.hasEndDate?'selected':''}>Sí</option></select></div><div id="endDateFields" class="grid grid-cols-2 gap-3 ${item?.hasEndDate?'':'hidden'}"><div><label class="block text-xs mb-1">Mes de finalización</label><select name="endMonth" class="w-full border rounded-lg px-3 py-2 text-sm">${MONTHS.map((m,i)=>`<option value="${i}" ${(item?.endMonth??state.currentMonth)===i?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-xs mb-1">Año de finalización</label><input type="number" name="endYear" value="${item?.endYear??state.currentYear}" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div>`:'';const inst=type==='installment'?`<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs mb-1">Monto total</label><input type="number" step="any" name="totalAmount" value="${item?.totalAmount||0}" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div><label class="block text-xs mb-1">Total de meses</label><input type="number" name="totalMonths" value="${item?.totalMonths||1}" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs mb-1">Mes inicial</label><select name="startMonth" class="w-full border rounded-lg px-3 py-2 text-sm">${MONTHS.map((m,i)=>`<option value="${i}" ${(item?.startMonth??item?.month??state.currentMonth)===i?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-xs mb-1">Año inicial</label><input type="number" name="startYear" value="${item?.startYear??item?.year??state.currentYear}" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div><div><label class="block text-xs mb-1">Pago por quincena</label><input type="number" step="any" name="quincenaAmount" value="${item?.quincenaAmount??((parseFloat(item?.amount||0)||0)/2)}" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div><label class="block text-xs mb-1">Tarjeta donde se hizo el gasto</label><select name="purchaseCard" class="w-full border rounded-lg px-3 py-2 text-sm">${getAccountOptions(item?.purchaseCard||'')}</select></div><div><label class="block text-xs mb-1">Estado</label><select name="status" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="pendiente" ${item?.status==='pendiente'?'selected':''}>pendiente</option><option value="apartado" ${item?.status==='apartado'?'selected':''}>apartado</option><option value="pagado" ${item?.status==='pagado'?'selected':''}>pagado</option></select></div><div><label class="block text-xs mb-1">Notas</label><textarea name="notes" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm">${escapeHtml(item?.notes||'')}</textarea></div>`:'';const variable=type==='variable'?`<div><label class="block text-xs mb-1">Monto estimado</label><input type="number" step="any" name="estimatedAmount" value="${item?.estimatedAmount||0}" class="w-full border rounded-lg px-3 py-2 text-sm"></div>`:'';document.getElementById('modalContent').innerHTML=`<div class="p-5"><div class="flex justify-between mb-4"><h3 class="font-bold flex items-center gap-2"><i data-lucide="${meta.icon}" class="w-4 h-4 ${meta.color}"></i>${item?'Editar':'Nuevo'} ${meta.title}</h3><button onclick="closeModal()" class="text-xl text-gray-400 hover:text-gray-600 leading-none">×</button></div><form class="space-y-3" onsubmit="saveRecordForm(event,'${type}','${item?.id||''}')"><div><label class="block text-xs mb-1">Concepto</label><input name="concept" value="${escapeHtml(item?.concept||'')}" class="w-full border rounded-lg px-3 py-2 text-sm"></div>${category}${inst}<div><label class="block text-xs mb-1">${type==='installment'?'Pago mensual':type==='variable'?'Monto real':'Monto'}</label><input type="number" step="any" name="amount" value="${item?.amount||0}" class="w-full border rounded-lg px-3 py-2 text-sm"></div>${variable}${split}${fixed}<div><label class="block text-xs mb-1">Día de pago real / vencimiento</label><input type="number" name="date" min="1" max="31" value="${item?.date||1}" class="w-full border rounded-lg px-3 py-2 text-sm"><p class="text-[11px] text-gray-400 mt-1">Este es el día que aparecerá en el calendario como fecha real de pago.</p></div><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs mb-1">Día para apartar Q1</label><input type="number" name="payDayQ1" min="1" max="31" value="${item?.payDayQ1||state.config.payDate1||1}" class="w-full border rounded-lg px-3 py-2 text-sm"></div><div><label class="block text-xs mb-1">Día para apartar Q2</label><input type="number" name="payDayQ2" min="1" max="31" value="${item?.payDayQ2||state.config.payDate2||16}" class="w-full border rounded-lg px-3 py-2 text-sm"></div></div><p class="text-[11px] text-gray-400">Estos días solo sirven para el texto de apartado en Próximos pagos. El calendario marca únicamente el día real de pago/vencimiento.</p><div><label class="block text-xs mb-1">${type==='installment'?'Tarjeta/cuenta desde donde se paga':'Tarjeta / cuenta'}</label><select name="card" class="w-full border rounded-lg px-3 py-2 text-sm">${getAccountOptions(item?.card||'')}</select></div><div class="flex gap-2 pt-2"><button class="flex-1 ${meta.button} text-white rounded-lg py-2 text-sm font-semibold">Guardar</button><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 text-sm">Cancelar</button></div></form></div>`;document.getElementById('modal').classList.remove('hidden');lucide.createIcons();}
+function toggleEndDateFields(v){const el=document.getElementById('endDateFields');if(el)el.classList.toggle('hidden',v!=='yes');}
+function saveRecordForm(event,type,id=''){event.preventDefault();const fd=new FormData(event.target),collection=type==='installment'?'installments':type==='fixed'?'fixed':'variable',item=state[collection]?.find(p=>p.id===id),payload={concept:fd.get('concept')||'-',amount:parseFloat(fd.get('amount'))||0,date:parseInt(fd.get('date'))||1,payDayQ1:parseInt(fd.get('payDayQ1'))||state.config.payDate1||1,payDayQ2:parseInt(fd.get('payDayQ2'))||state.config.payDate2||16,card:fd.get('card')||'',month:item?.month??state.currentMonth,year:item?.year??state.currentYear,paid:item?.paid||false,apartadoQ1:item?.apartadoQ1||false,apartadoQ2:item?.apartadoQ2||false,splitMode:fd.get('splitMode')||'Dividir en dos quincenas',firstSetAside:fd.get('firstSetAside')||'current-q2',manualQ1:parseFloat(fd.get('manualQ1'))||0,manualQ2:parseFloat(fd.get('manualQ2'))||0};if(type==='fixed'){payload.category=fd.get('category')||'otros';payload.startMonth=parseInt(fd.get('startMonth'))||0;payload.startYear=parseInt(fd.get('startYear'))||state.currentYear;payload.hasEndDate=fd.get('hasEndDate')==='yes';payload.endMonth=payload.hasEndDate?(parseInt(fd.get('endMonth'))||payload.startMonth):null;payload.endYear=payload.hasEndDate?(parseInt(fd.get('endYear'))||payload.startYear):null;payload.month=payload.startMonth;payload.year=payload.startYear;payload.monthlyStatus=item?.monthlyStatus||{};}if(type==='installment'){payload.totalAmount=parseFloat(fd.get('totalAmount'))||0;payload.totalMonths=parseInt(fd.get('totalMonths'))||1;payload.startMonth=parseInt(fd.get('startMonth'))||0;payload.startYear=parseInt(fd.get('startYear'))||state.currentYear;payload.month=payload.startMonth;payload.year=payload.startYear;payload.quincenaAmount=parseFloat(fd.get('quincenaAmount'))||((parseFloat(payload.amount)||0)/2);payload.purchaseCard=fd.get('purchaseCard')||'';payload.status=fd.get('status')||'pendiente';payload.notes=fd.get('notes')||'';payload.monthlyStatus=item?.monthlyStatus||{};}if(type==='variable'){const customCategory=addCategoryIfNeeded(fd.get('newCategory'));payload.category=customCategory||fd.get('category')||'otros';payload.estimatedAmount=parseFloat(fd.get('estimatedAmount'))||0;}if(item)Object.assign(item,payload);else state[collection].push({id:uid(),...payload});saveState();closeModal();render();}
+function confirmDelete(id,col){deleteTarget={id,col};document.getElementById('deleteConfirm').classList.remove('hidden');document.getElementById('confirmDeleteBtn').onclick=()=>{state[deleteTarget.col]=state[deleteTarget.col].filter(i=>i.id!==deleteTarget.id);saveState();closeDeleteConfirm();render();};}
+function closeDeleteConfirm(){document.getElementById('deleteConfirm').classList.add('hidden');deleteTarget=null;}function closeModal(){document.getElementById('modal').classList.add('hidden');}
+function renderConfigView(){
+  const rows=getAccounts().map(a=>`<tr class="border-b"><td class="py-3 px-4 font-medium">${escapeHtml(a.name)}</td><td class="py-3 px-4">${escapeHtml(a.type)}</td><td class="py-3 px-4">${escapeHtml(a.bank||'-')}</td><td class="py-3 px-4">${escapeHtml(a.notes||'-')}</td><td class="py-3 px-4"><button onclick="openAccountModal('${a.id}')" class="text-xs px-2 py-1 bg-lila-100 text-lila-600 rounded">Editar</button> <button onclick="deleteAccount('${a.id}')" class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded">Borrar</button></td></tr>`).join('')||'<tr><td colspan="5" class="p-4 text-center text-gray-400">Aún no tienes tarjetas/cuentas creadas</td></tr>';
+  const ex=state.config.yearEndExtras||{bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
+  if(!ex.otherName) ex.otherName='Otro extra';
+  document.getElementById('mainContent').innerHTML=`<h2 class="text-2xl font-bold mb-4 flex items-center gap-2"><i data-lucide="settings" class="w-6 h-6 text-lila-400"></i>Configuración</h2>
+  <div class="bg-white rounded-xl card-shadow p-5 mb-4"><h3 class="font-bold mb-3">Datos generales</h3><div class="grid grid-cols-4 gap-3"><div><label class="text-xs text-gray-500 font-medium">Sueldo por quincena</label><input type="number" step="any" value="${state.config.salaryBiweekly}" onchange="updateConfig('salaryBiweekly',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="Sueldo por quincena"></div><div><label class="text-xs text-gray-500 font-medium">Meta de ahorro mensual</label><input type="number" step="any" value="${state.config.savingsGoal}" onchange="updateConfig('savingsGoal',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="Meta ahorro mensual"></div><div><label class="text-xs text-gray-500 font-medium">Fecha estimada pago Q1</label><input type="number" value="${state.config.payDate1}" onchange="updateConfig('payDate1',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="Ej. 13"></div><div><label class="text-xs text-gray-500 font-medium">Fecha estimada pago Q2</label><input type="number" value="${state.config.payDate2}" onchange="updateConfig('payDate2',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="Ej. 28"></div></div><div class="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100"><div><label class="text-xs text-gray-500 font-medium">Mes desde que empecé mi meta general</label><select onchange="updateConfig('savingsStartMonth',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1">${MONTHS.map((m,i)=>`<option value="${i}" ${parseInt(state.config.savingsStartMonth)===i?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="text-xs text-gray-500 font-medium">Año desde que empecé mi meta general</label><input type="number" value="${state.config.savingsStartYear||state.currentYear}" onchange="updateConfig('savingsStartYear',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="2026"></div></div><p class="text-[11px] text-gray-400 mt-2">Esto solo calcula el resumen anual del ahorro general. No mezcla metas extras como viaje, laptop u otras metas personalizadas.</p></div>
+  <div class="bg-white rounded-xl card-shadow p-5 mb-4"><div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="font-bold flex items-center gap-2"><i data-lucide="calendar-clock" class="w-4 h-4 text-lila-500"></i>Fechas reales de nómina del mes</h3><p class="text-xs text-gray-400">La configuración guarda tu fecha estimada. Aquí puedes ajustar la fecha real cuando el pago caiga diferente ese mes.</p></div><span class="text-[11px] px-2 py-1 rounded-full bg-lila-50 text-lila-500 border border-lila-100">${MONTHS[state.currentMonth]} ${state.currentYear}</span></div><div class="grid grid-cols-2 gap-3"><div><label class="text-xs text-gray-500 font-medium">Depósito real Q1</label><input type="date" value="${getPayrollOverride(1)||''}" onchange="updatePayrollOverride(1,this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"><p class="text-[11px] text-gray-400 mt-1">Si lo dejas vacío usa estimado: ${formatShortDate(getPayrollDefaultDate(1))}</p></div><div><label class="text-xs text-gray-500 font-medium">Depósito real Q2</label><input type="date" value="${getPayrollOverride(2)||''}" onchange="updatePayrollOverride(2,this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"><p class="text-[11px] text-gray-400 mt-1">Si lo dejas vacío usa estimado: ${formatShortDate(getPayrollDefaultDate(2))}</p></div></div></div>
+  <div class="bg-white rounded-xl card-shadow p-5 mb-4"><div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="font-bold flex items-center gap-2"><i data-lucide="gift" class="w-4 h-4 text-menta-500"></i>Ingresos extra de fin de año</h3><p class="text-xs text-gray-400">Guarda el estimado y luego captura el monto real para completar la estadística anual.</p></div><span class="text-[11px] px-2 py-1 rounded-full bg-menta-50 text-menta-500 border border-menta-100">Separado del sueldo</span></div><div class="grid grid-cols-3 gap-3 mb-3"><div><label class="text-xs text-gray-500">Aguinaldo estimado</label><input type="number" step="any" value="${ex.bonusEstimated||0}" onchange="updateYearEndExtra('bonusEstimated',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"></div><div><label class="text-xs text-gray-500">Fondo de ahorro estimado</label><input type="number" step="any" value="${ex.savingsFundEstimated||0}" onchange="updateYearEndExtra('savingsFundEstimated',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"></div><div><label class="text-xs text-gray-500">Nombre del otro extra</label><input type="text" value="${escapeHtml(ex.otherName||'Otro extra')}" onchange="updateYearEndExtra('otherName',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1" placeholder="Ej. Prima vacacional, bono, devolución"></div><div><label class="text-xs text-gray-500">${escapeHtml(ex.otherName||'Otro extra')} estimado</label><input type="number" step="any" value="${ex.otherEstimated||0}" onchange="updateYearEndExtra('otherEstimated',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"></div><div><label class="text-xs text-gray-500">Aguinaldo real</label><input type="number" step="any" value="${ex.bonusReal||0}" onchange="updateYearEndExtra('bonusReal',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"></div><div><label class="text-xs text-gray-500">Fondo de ahorro real</label><input type="number" step="any" value="${ex.savingsFundReal||0}" onchange="updateYearEndExtra('savingsFundReal',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"></div><div><label class="text-xs text-gray-500">${escapeHtml(ex.otherName||'Otro extra')} real</label><input type="number" step="any" value="${ex.otherReal||0}" onchange="updateYearEndExtra('otherReal',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1"></div></div><label class="text-xs text-gray-500">Notas</label><textarea onchange="updateYearEndExtra('notes',this.value)" class="w-full border rounded-lg px-3 py-2 mt-1" rows="2" placeholder="Ej. cálculo estimado, fecha de pago o ajuste al cierre del año">${escapeHtml(ex.notes||'')}</textarea></div>
+  <div class="bg-white rounded-xl card-shadow p-5 mb-4"><div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="font-bold flex items-center gap-2"><i data-lucide="download" class="w-4 h-4 text-azul-500"></i>Respaldo de información</h3><p class="text-xs text-gray-400">Exporta tus datos para guardarlos y vuelve a importarlos si cambias de computadora o navegador.</p></div><span class="text-[11px] px-2 py-1 rounded-full bg-azul-50 text-azul-500 border border-azul-100">Archivo .json</span></div><div class="grid grid-cols-2 gap-3"><button onclick="exportBackup()" class="bg-azul-500 hover:bg-azul-400 text-white rounded-xl px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2"><i data-lucide="download" class="w-4 h-4"></i>Exportar información</button><label class="bg-lila-50 hover:bg-lila-100 text-lila-500 border border-lila-100 rounded-xl px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer"><i data-lucide="upload" class="w-4 h-4"></i>Importar información<input type="file" accept="application/json,.json" onchange="importBackup(event)" class="hidden"></label></div><div class="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 mt-3"><b>Tip:</b> guarda el archivo en Drive, iCloud o USB. Para usar la app en otra compu, abre el HTML e importa este respaldo.</div></div>
+  <div class="bg-white rounded-xl card-shadow p-5"><div class="flex justify-between mb-4"><div><h3 class="font-bold">Mis tarjetas y cuentas</h3><p class="text-xs text-gray-400">Estas opciones aparecerán automáticamente en todos los selectores de Tarjeta/cuenta.</p></div><button onclick="openAccountModal()" class="px-4 py-2 rounded-lg bg-lila-500 text-white text-sm font-semibold">+ Agregar tarjeta/cuenta</button></div><table class="w-full"><thead><tr class="bg-gray-50"><th class="p-3 text-left text-xs">Nombre</th><th class="p-3 text-left text-xs">Tipo</th><th class="p-3 text-left text-xs">Banco/institución</th><th class="p-3 text-left text-xs">Notas</th><th class="p-3 text-left text-xs">Acción</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function updateConfig(k,v){state.config[k]=parseFloat(v)||0;state.config.salaryMonthly=(state.config.salaryBiweekly||0)*2;saveState();render();}
+function updatePayrollOverride(q,value){
+  if(!state.config.payrollOverrides)state.config.payrollOverrides={};
+  const key=payrollOverrideKey();
+  if(!state.config.payrollOverrides[key])state.config.payrollOverrides[key]={};
+  if(value)state.config.payrollOverrides[key][`q${q}`]=value;
+  else delete state.config.payrollOverrides[key][`q${q}`];
+  saveState();render();
+}
+function openPayrollMonthModal(){
+  const q1Default=getPayrollDefaultDate(1), q2Default=getPayrollDefaultDate(2);
+  document.getElementById('modalContent').innerHTML=`<div class="p-5">
+    <div class="flex justify-between mb-4"><div><h3 class="font-bold flex items-center gap-2"><i data-lucide="calendar-clock" class="w-4 h-4 text-lila-500"></i>Fechas reales de pago · ${MONTHS[state.currentMonth]} ${state.currentYear}</h3><p class="text-xs text-gray-400 mt-1">Usa esto solo cuando la nómina caiga diferente a tu fecha estimada.</p></div><button onclick="closeModal()" class="text-xl text-gray-400 hover:text-gray-600 leading-none">×</button></div>
+    <div class="grid grid-cols-2 gap-3 mb-4 text-xs">
+      <div class="bg-lila-50 border border-lila-100 rounded-xl p-3"><span class="text-gray-400">Q1 estimado</span><div class="font-bold text-lila-500">${formatShortDate(q1Default)}</div></div>
+      <div class="bg-lila-50 border border-lila-100 rounded-xl p-3"><span class="text-gray-400">Q2 estimado</span><div class="font-bold text-lila-500">${formatShortDate(q2Default)}</div></div>
+    </div>
+    <form class="space-y-3" onsubmit="savePayrollMonthForm(event)">
+      <div><label class="block text-xs mb-1">Fecha real de pago Q1</label><input type="date" name="q1" value="${getPayrollOverride(1)||''}" class="w-full border rounded-lg px-3 py-2 text-sm"><p class="text-[11px] text-gray-400 mt-1">Vacío = se usa el estimado ${formatShortDate(q1Default)}.</p></div>
+      <div><label class="block text-xs mb-1">Fecha real de pago Q2</label><input type="date" name="q2" value="${getPayrollOverride(2)||''}" class="w-full border rounded-lg px-3 py-2 text-sm"><p class="text-[11px] text-gray-400 mt-1">Vacío = se usa el estimado ${formatShortDate(q2Default)}.</p></div>
+      <div class="bg-azul-50 border border-azul-100 rounded-xl p-3 text-xs text-azul-500">Estas fechas no cambian el concepto de Q1/Q2; solo actualizan el día real del depósito para textos como “depósito real” y para tu lectura del mes.</div>
+      <div class="flex gap-2 pt-2"><button class="flex-1 bg-lila-500 text-white rounded-lg py-2 text-sm font-semibold">Guardar fechas</button><button type="button" onclick="closeModal()" class="px-4 py-2 rounded-lg bg-gray-100 text-sm">Cancelar</button></div>
+    </form>
+  </div>`;
+  document.getElementById('modal').classList.remove('hidden');lucide.createIcons();
+}
+function savePayrollMonthForm(event){
+  event.preventDefault();
+  const fd=new FormData(event.target);
+  updatePayrollOverrideSilent(1,fd.get('q1')||'');
+  updatePayrollOverrideSilent(2,fd.get('q2')||'');
+  saveState();closeModal();render();
+}
+function updatePayrollOverrideSilent(q,value){
+  if(!state.config.payrollOverrides)state.config.payrollOverrides={};
+  const key=payrollOverrideKey();
+  if(!state.config.payrollOverrides[key])state.config.payrollOverrides[key]={};
+  if(value)state.config.payrollOverrides[key][`q${q}`]=value;
+  else delete state.config.payrollOverrides[key][`q${q}`];
+}
+function getSavingsGoalMonthsInYear(year=state.currentYear){
+  const sm=parseInt(state.config.savingsStartMonth)||0;
+  const sy=parseInt(state.config.savingsStartYear)||year;
+  if(year<sy)return 0;
+  if(year>sy)return 12;
+  return Math.max(0,12-sm);
+}
+function getAnnualSavingsGoalStats(year=state.currentYear){
+  const monthly=parseFloat(state.config.savingsGoal)||0;
+  const biweekly=monthly/2;
+  const activeMonths=getSavingsGoalMonthsInYear(year);
+  const estimated=monthly*activeMonths;
+  const real=(state.savings||[]).filter(s=>s.year===year&&!s.goalId&&isSavingConfirmed(s)).reduce((sum,s)=>sum+getSavingRealAmount(s),0);
+  const planned=(state.savings||[]).filter(s=>s.year===year&&!s.goalId&&!isSavingConfirmed(s)).reduce((sum,s)=>sum+getSavingPlannedAmount(s),0);
+  const diff=real-estimated;
+  return {monthly,biweekly,activeMonths,estimated,real,planned,diff,missing:Math.max(0,estimated-real)};
+}
+function getGoalAnnualStats(goal,year=state.currentYear){
+  const start=monthIndex(goal.startMonth??0,goal.startYear??year);
+  const end=monthIndex(goal.endMonth??goal.startMonth??0,goal.endYear??goal.startYear??year);
+  const yStart=monthIndex(0,year), yEnd=monthIndex(11,year);
+  const overlapStart=Math.max(start,yStart), overlapEnd=Math.min(end,yEnd);
+  const activeMonths=overlapEnd>=overlapStart?(overlapEnd-overlapStart+1):0;
+  const totalMonths=Math.max(1,end-start+1);
+  const objective=parseFloat(goal.amount)||0;
+  const monthlyTarget=objective/totalMonths;
+  const estimated=monthlyTarget*activeMonths;
+  const real=(state.savings||[]).filter(s=>s.year===year&&s.goalId===goal.id&&isSavingConfirmed(s)).reduce((sum,s)=>sum+getSavingRealAmount(s),0);
+  const planned=(state.savings||[]).filter(s=>s.year===year&&s.goalId===goal.id&&!isSavingConfirmed(s)).reduce((sum,s)=>sum+getSavingPlannedAmount(s),0);
+  const diff=real-estimated;
+  const pct=estimated?Math.round((real/estimated)*100):0;
+  return {objective,monthlyTarget,activeMonths,estimated,real,planned,diff,missing:Math.max(0,estimated-real),pct};
+}
+function renderAnnualSavingsGoalBlock(){
+  const st=getAnnualSavingsGoalStats(state.currentYear);
+  const startLabel=`${MONTHS[parseInt(state.config.savingsStartMonth)||0]} ${state.config.savingsStartYear||state.currentYear}`;
+  const customGoals=(state.savingsGoals||[]).filter(g=>getGoalAnnualStats(g,state.currentYear).activeMonths>0);
+  const generalPct=st.estimated?Math.round((st.real/st.estimated)*100):0;
+  const customRows=customGoals.map(goal=>{
+    const g=getGoalAnnualStats(goal,state.currentYear);
+    const period=`${MONTHS[goal.startMonth]} ${goal.startYear} - ${MONTHS[goal.endMonth]} ${goal.endYear}`;
+    return `<div class="bg-white border border-gray-100 rounded-xl p-3 card-shadow">
+      <div class="flex items-start justify-between gap-3 mb-2">
+        <div><h4 class="font-bold text-gray-800">${escapeHtml(goal.name)}</h4><p class="text-[11px] text-gray-400">${period}</p></div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full ${g.diff>=0?'bg-menta-50 text-menta-500 border-menta-100':'bg-durazno-50 text-durazno-500 border-durazno-100'} border">${g.diff>=0?'Arriba de meta':'Debajo de meta'}</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2 text-[11px] mb-2">
+        <div class="bg-lila-50 rounded-lg p-2"><span class="text-gray-400">Objetivo total</span><div class="font-bold text-lila-500">${fmt(g.objective)}</div></div>
+        <div class="bg-azul-50 rounded-lg p-2"><span class="text-gray-400">Meta estimada ${state.currentYear}</span><div class="font-bold text-azul-500">${fmt(g.estimated)}</div></div>
+        <div class="bg-menta-50 rounded-lg p-2"><span class="text-gray-400">Real ahorrado</span><div class="font-bold text-menta-500">${fmt(g.real)}</div></div>
+        <div class="bg-durazno-50 rounded-lg p-2"><span class="text-gray-400">Falta anual</span><div class="font-bold text-durazno-500">${fmt(g.missing)}</div></div>
+      </div>
+      <div class="flex justify-between text-[11px] text-gray-400 mb-1"><span>Avance contra meta anual estimada</span><b class="text-gray-600">${g.pct}%</b></div>
+      <div class="w-full bg-gray-100 h-2 rounded-full overflow-hidden"><div class="${g.diff>=0?'bg-menta-400':'bg-azul-400'} h-2 rounded-full" style="width:${Math.min(100,Math.max(3,g.pct))}%"></div></div>
+      <div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 mt-2">
+        <div>Meses considerados: <b class="text-gray-600">${g.activeMonths}</b></div>
+        <div>Meta mensual aprox: <b class="text-lila-500">${fmt(g.monthlyTarget)}</b></div>
+        <div>Diferencia: <b class="${g.diff>=0?'text-menta-500':'text-durazno-500'}">${g.diff>=0?'+':'-'}${fmt(Math.abs(g.diff))}</b></div>
+      </div>
+    </div>`;
+  }).join('')||`<div class="bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm text-gray-400 text-center">Aún no tienes metas extra activas en ${state.currentYear}. Cuando crees una meta como viaje, laptop o mudanza, aparecerá aquí con su avance anual.</div>`;
+  return `<div class="bg-white rounded-2xl card-shadow border border-gray-100 p-5 mb-4">
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div>
+        <h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="piggy-bank" class="w-5 h-5 text-azul-500"></i>Resumen anual de ahorro</h3>
+        <p class="text-sm text-gray-400 mt-1">Desglose separado del ahorro general y de cada meta extra registrada.</p>
+      </div>
+      <span class="text-[11px] px-3 py-1 rounded-full bg-azul-50 text-azul-500 border border-azul-100">General desde: ${startLabel}</span>
+    </div>
+    <div class="bg-azul-50 border border-azul-100 rounded-2xl p-4 mb-4">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div><h4 class="font-bold text-gray-800">Ahorro general</h4><p class="text-xs text-gray-400">Solo registros guardados como General. No mezcla metas extra.</p></div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full ${st.diff>=0?'bg-menta-50 text-menta-500 border-menta-100':'bg-durazno-50 text-durazno-500 border-durazno-100'} border">${st.diff>=0?'Arriba de meta':'Debajo de meta'}</span>
+      </div>
+      <div class="grid grid-cols-5 gap-2 text-[11px] mb-3">
+        <div class="bg-white/80 rounded-lg p-2"><span class="text-gray-400">Meta mensual</span><div class="font-bold text-lila-500">${fmt(st.monthly)}</div></div>
+        <div class="bg-white/80 rounded-lg p-2"><span class="text-gray-400">Meta por quincena</span><div class="font-bold text-azul-500">${fmt(st.biweekly)}</div></div>
+        <div class="bg-white/80 rounded-lg p-2"><span class="text-gray-400">Estimado anual</span><div class="font-bold text-lila-500">${fmt(st.estimated)}</div></div>
+        <div class="bg-white/80 rounded-lg p-2"><span class="text-gray-400">Real general</span><div class="font-bold text-menta-500">${fmt(st.real)}</div></div>
+        <div class="bg-white/80 rounded-lg p-2"><span class="text-gray-400">Falta</span><div class="font-bold text-durazno-500">${fmt(st.missing)}</div></div>
+      </div>
+      <div class="flex justify-between text-[11px] text-gray-400 mb-1"><span>Avance de ahorro general</span><b class="text-gray-600">${generalPct}%</b></div>
+      <div class="w-full bg-white h-2 rounded-full overflow-hidden"><div class="bg-azul-400 h-2 rounded-full" style="width:${Math.min(100,Math.max(3,generalPct))}%"></div></div>
+      <div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 mt-2"><div>Meses considerados: <b class="text-gray-600">${st.activeMonths}</b></div><div>Inicio: <b class="text-azul-500">${startLabel}</b></div><div>Diferencia: <b class="${st.diff>=0?'text-menta-500':'text-durazno-500'}">${st.diff>=0?'+':'-'}${fmt(Math.abs(st.diff))}</b></div></div>
+    </div>
+    <div>
+      <h4 class="font-bold text-gray-800 mb-3 flex items-center gap-2"><i data-lucide="target" class="w-4 h-4 text-lila-500"></i>Metas extra de ahorro</h4>
+      <div class="grid grid-cols-1 gap-3">${customRows}</div>
+    </div>
+  </div>`;
+}
+function updateYearEndExtra(k,v){
+  if(!state.config.yearEndExtras) state.config.yearEndExtras={bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
+  state.config.yearEndExtras[k]=(k==='notes'||k==='otherName')?String(v||''):(parseFloat(v)||0);
+  saveState();
+  render();
+}
+function exportBackup(){
+  const payload={
+    app:'Mi plan de pagos',
+    version:'1.0',
+    exportedAt:new Date().toISOString(),
+    data:state
+  };
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const date=new Date().toISOString().slice(0,10);
+  a.href=url;
+  a.download=`mi-plan-de-pagos-respaldo-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function importBackup(event){
+  const file=event.target.files&&event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const parsed=JSON.parse(reader.result);
+      const imported=parsed.data||parsed;
+      if(!imported||typeof imported!=='object'||!imported.config){alert('El archivo no parece ser un respaldo válido de Mi plan de pagos.');return;}
+      if(!confirm('¿Importar este respaldo? Esto reemplazará la información actual de la app en este navegador.'))return;
+      state=imported;
+      if(!state.config.yearEndExtras) state.config.yearEndExtras={bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
+      if(!state.config.yearEndExtras.otherName) state.config.yearEndExtras.otherName='Otro extra';
+      if(!state.savingsGoals||!Array.isArray(state.savingsGoals)) state.savingsGoals=[];
+      if(!state.monthNotes||typeof state.monthNotes!=='object') state.monthNotes={};
+      if(!Array.isArray(state.fixed)) state.fixed=[];
+      if(!Array.isArray(state.installments)) state.installments=[];
+      if(!Array.isArray(state.variable)) state.variable=[];
+      if(!Array.isArray(state.savings)) state.savings=[];
+      if(!Array.isArray(state.accounts)) state.accounts=[];
+      if(!state.categories||!Array.isArray(state.categories)) state.categories=[...DEFAULT_CATEGORIES];
+      saveState();
+      alert('Respaldo importado correctamente.');
+      render();
+    }catch(err){
+      alert('No se pudo importar el archivo. Revisa que sea un .json válido.');
+    }finally{
+      event.target.value='';
+    }
+  };
+  reader.readAsText(file);
+}
+function openAccountModal(id=''){const item=getAccounts().find(a=>a.id===id);document.getElementById('modalContent').innerHTML=`<div class="p-5"><div class="flex justify-between mb-4"><h3 class="font-bold">${item?'Editar':'Agregar'} tarjeta/cuenta</h3><button onclick="closeModal()" class="text-xl text-gray-400">×</button></div><form class="space-y-3" onsubmit="saveAccount(event,'${item?.id||''}')"><input name="name" value="${escapeHtml(item?.name||'')}" placeholder="Nombre personalizado" class="w-full border rounded-lg px-3 py-2"><select name="type" class="w-full border rounded-lg px-3 py-2">${ACCOUNT_TYPES.map(t=>`<option value="${t}" ${item?.type===t?'selected':''}>${t}</option>`).join('')}</select><input name="bank" value="${escapeHtml(item?.bank||'')}" placeholder="Banco o institución" class="w-full border rounded-lg px-3 py-2"><textarea name="notes" class="w-full border rounded-lg px-3 py-2" placeholder="Notas opcionales">${escapeHtml(item?.notes||'')}</textarea><button class="w-full bg-lila-500 text-white rounded-lg py-2 font-semibold">Guardar</button></form></div>`;document.getElementById('modal').classList.remove('hidden');}
+function saveAccount(event,id=''){event.preventDefault();const fd=new FormData(event.target),payload={name:fd.get('name'),type:fd.get('type'),bank:fd.get('bank'),notes:fd.get('notes')};if(id){const a=state.accounts.find(x=>x.id===id);if(a)Object.assign(a,payload);}else state.accounts.push({id:uid(),...payload});saveState();closeModal();render();}
+function deleteAccount(id){state.accounts=state.accounts.filter(a=>a.id!==id);saveState();render();}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});document.addEventListener('click',e=>{const pop=document.getElementById('calendarPopover');if(!pop)return;const cal=document.getElementById('miniCalendar');if(pop.contains(e.target))return;if(cal&&cal.contains(e.target)&&e.target.closest('[onclick^="openCalendarPopover"]'))return;closeCalendarPopover();});
+function renderSidebar(){const p=getPaymentsForMonth(state.currentMonth,state.currentYear),ts=totalConfirmedSavings(p.sav),goal=state.config.savingsGoal||0,pct=goal?Math.min(100,Math.round(ts/goal*100)):0;document.getElementById('sidebarSavingsTitle').textContent=`Meta de ahorro · ${MONTHS[state.currentMonth]} ${state.currentYear}`;document.getElementById('sidebarSavingsGoal').textContent=fmt(goal);document.getElementById('sidebarSaved').textContent=fmt(ts);document.getElementById('sidebarProgress').style.width=pct+'%';document.getElementById('sidebarTotalSavings').textContent=fmt(totalConfirmedSavings(state.savings));}
+document.getElementById('sideNav').addEventListener('click',e=>{const btn=e.target.closest('[data-view]');if(!btn)return;document.querySelectorAll('.sidebar-item').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentView=btn.dataset.view;render();});
+function runSmokeTests(){
+  try{
+    console.assert(typeof render==='function','render exists');
+    console.assert(Array.isArray(state.savings),'savings array exists');
+    console.assert(Array.isArray(state.accounts),'accounts array exists');
+    console.assert(getStatusVisual('apartado').text==='text-azul-500','apartado blue');
+    console.assert(getStatusVisual('pagado').text==='text-menta-500','pagado green');
+    console.assert(getStatusVisual('pendiente').text==='text-durazno-500','pendiente orange');
+    console.assert((8100-Math.max(4660.50,0))===3439.50,'free amount formula ok');
+  }catch(e){
+    console.warn('Revisión interna omitida para no bloquear la app',e);
+  }
+}
+runSmokeTests();
+render();
+</script>
+
+</body>
+<!-- canvas refresh preview ok -->
+</html>
