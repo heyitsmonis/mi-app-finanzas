@@ -133,6 +133,62 @@
   .card-shadow{box-shadow:0 5px 14px rgba(15,23,42,.05) !important;}
   table{min-width:560px;}
 }
+
+/* Landscape dashboard mode: iPad y celular horizontal */
+@media (orientation: landscape) and (max-width: 1180px){
+  html,body{width:100%;height:100%;overflow:hidden !important;}
+  .flex.h-screen{display:flex !important;flex-direction:row !important;height:100vh !important;min-height:100vh !important;overflow:hidden !important;}
+  aside,.w-64{width:170px !important;min-width:170px !important;max-width:170px !important;height:100vh !important;overflow-y:auto !important;border-right:1px solid #edf1f7 !important;border-bottom:0 !important;position:relative !important;}
+  aside > div:first-child,.w-64 > div:first-child{padding:.8rem .7rem !important;}
+  aside > div:first-child h1,.w-64 > div:first-child h1{font-size:1rem !important;line-height:1.1 !important;}
+  aside nav,.w-64 nav{display:flex !important;flex-direction:column !important;gap:.25rem !important;overflow:visible !important;padding:.45rem !important;}
+  aside nav button,.w-64 nav button{width:100% !important;justify-content:flex-start !important;font-size:11px !important;padding:.5rem .55rem !important;border-radius:.75rem !important;white-space:normal !important;line-height:1.15 !important;}
+  aside nav button i,.w-64 nav button i{width:14px !important;height:14px !important;min-width:14px !important;}
+  aside .mt-auto,.w-64 .mt-auto{display:block !important;padding:.45rem !important;}
+  aside .mt-auto .card-shadow,.w-64 .mt-auto .card-shadow{padding:.55rem !important;border-radius:.85rem !important;}
+  aside .mt-auto .text-2xl,.w-64 .mt-auto .text-2xl{font-size:1rem !important;}
+  aside .mt-auto .text-lg,.w-64 .mt-auto .text-lg{font-size:.9rem !important;}
+  aside .mt-auto .text-sm,.w-64 .mt-auto .text-sm{font-size:.7rem !important;}
+  aside .mt-auto .text-xs,.w-64 .mt-auto .text-xs{font-size:.65rem !important;}
+  main,.flex-1{height:100vh !important;overflow-y:auto !important;overflow-x:hidden !important;min-width:0 !important;width:calc(100vw - 170px) !important;}
+  #mainContent{padding:.8rem !important;width:100% !important;max-width:100% !important;overflow:visible !important;}
+  #mainContent > .flex:first-child{display:flex !important;flex-direction:row !important;align-items:center !important;justify-content:space-between !important;gap:.5rem !important;position:static !important;background:transparent !important;}
+  #mainContent > .flex:first-child h2{font-size:1.15rem !important;}
+  #mainContent > .flex:first-child .flex{gap:.4rem !important;}
+  #mainContent > .flex:first-child button{font-size:11px !important;padding:.5rem .65rem !important;}
+  .grid.grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr)) !important;}
+  .grid.grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr)) !important;}
+  .grid.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr)) !important;}
+  .grid.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  .grid.grid-cols-12{grid-template-columns:repeat(12,minmax(0,1fr)) !important;}
+  .col-span-4{grid-column:span 4 / span 4 !important;}
+  .col-span-5{grid-column:span 5 / span 5 !important;}
+  .col-span-6{grid-column:span 6 / span 6 !important;}
+  .col-span-7{grid-column:span 7 / span 7 !important;}
+  .col-span-8{grid-column:span 8 / span 8 !important;}
+  .col-span-12{grid-column:span 12 / span 12 !important;}
+  .card-shadow{box-shadow:0 5px 14px rgba(15,23,42,.05) !important;}
+  .p-5{padding:.8rem !important;}
+  .p-4{padding:.7rem !important;}
+  .text-2xl{font-size:1.25rem !important;}
+  .text-xl{font-size:1.05rem !important;}
+  .text-lg{font-size:.95rem !important;}
+  table{font-size:11px !important;}
+  th,td{padding:.45rem .35rem !important;}
+  .overflow-x-auto{overflow-x:auto !important;-webkit-overflow-scrolling:touch;}
+}
+@media (orientation: landscape) and (max-width: 760px){
+  aside,.w-64{width:145px !important;min-width:145px !important;max-width:145px !important;}
+  main,.flex-1{width:calc(100vw - 145px) !important;}
+  #mainContent{padding:.6rem !important;}
+  aside > div:first-child h1,.w-64 > div:first-child h1{font-size:.9rem !important;}
+  aside nav button,.w-64 nav button{font-size:10px !important;padding:.45rem .45rem !important;}
+  aside .mt-auto{display:none !important;}
+  .grid.grid-cols-4,.grid.grid-cols-5{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  .grid.grid-cols-12{grid-template-columns:1fr !important;}
+  .col-span-4,.col-span-5,.col-span-6,.col-span-7,.col-span-8,.col-span-12{grid-column:span 1 / span 1 !important;}
+  table{min-width:560px;}
+}
 </style>
 </head>
 <body class="h-full bg-gray-50 font-main text-gray-700">
