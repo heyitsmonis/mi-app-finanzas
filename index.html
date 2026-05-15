@@ -512,13 +512,32 @@ function makeSavingsPlanningItems(p){
 }
 function getPlanTotal(arr){return (arr||[]).reduce((s,i)=>s+getAmountToSetAside(i,1)+getAmountToSetAside(i,2),0);}
 function getApartTotal(arr){return (arr||[]).reduce((s,i)=>s+getRealSetAsideAmount(i,1)+getRealSetAsideAmount(i,2),0);}
-function getDashboardAllItems(){const p=getPaymentsForMonth(state.currentMonth,state.currentYear);const savingsItems=makeSavingsPlanningItems(p);return {p,all:[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...savingsItems]};}
+function getBiweeklyItems(m=state.currentMonth,y=state.currentYear){
+  const p=getPaymentsForMonth(m,y);
+  const savingsItems=makeSavingsPlanningItems(p);
+  return {p,all:[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...savingsItems]};
+}
+function getBiweeklyPlannedTotal(q,m=state.currentMonth,y=state.currentYear){
+  const {all}=getBiweeklyItems(m,y);
+  return all.reduce((s,i)=>s+getAmountToSetAside(i,q),0);
+}
+function getBiweeklyApartedTotal(q,m=state.currentMonth,y=state.currentYear){
+  const {all}=getBiweeklyItems(m,y);
+  return all.reduce((s,i)=>s+getRealSetAsideAmount(i,q),0);
+}
+function getBiweeklyFreeAmount(q,m=state.currentMonth,y=state.currentYear){
+  const salary=state.config.salaryBiweekly||0;
+  const planned=getBiweeklyPlannedTotal(q,m,y);
+  const aparted=getBiweeklyApartedTotal(q,m,y);
+  return salary-Math.max(planned,aparted);
+}
+function getDashboardAllItems(){return getBiweeklyItems(state.currentMonth,state.currentYear);}
 function getUpcomingPayments(limit=6){const {all}=getDashboardAllItems();const list=[];all.forEach(item=>{[1,2].forEach(q=>{const amount=getAmountToSetAside(item,q);if(amount<=0)return;const status=getPaymentStatusForQuincena(item,q);const due=getRealPaymentMonthYearForQuincena(item,q,state.currentMonth,state.currentYear);list.push({day:parseInt(item.date)||1,dueMonth:due.month,dueYear:due.year,q,concept:item.concept||'Registro',type:getPaymentType(item),card:item.card||'-',amount,status,subtitle:getUpcomingSubtitle(item,q,status,state.currentMonth,state.currentYear),dueText:`Fecha de pago ${getPaymentDueLabel(item,q,state.currentMonth,state.currentYear)}`});});});return list.sort((a,b)=>monthIndex(a.dueMonth,a.dueYear)-monthIndex(b.dueMonth,b.dueYear)||a.day-b.day).slice(0,limit);}
 function renderSmartDashboardBlocks(){
   const {p,all}=getDashboardAllItems(),salary=state.config.salaryBiweekly||0;
-  const q1=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),q2=all.reduce((s,i)=>s+getAmountToSetAside(i,2),0);
-  const q1Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,1),0),q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0);
-  const free1=salary-q1,free2=salary-q2;
+  const q1=getBiweeklyPlannedTotal(1),q2=getBiweeklyPlannedTotal(2);
+  const q1Apart=getBiweeklyApartedTotal(1),q2Apart=getBiweeklyApartedTotal(2);
+  const free1=getBiweeklyFreeAmount(1),free2=getBiweeklyFreeAmount(2);
   const heavy=q1>=q2?'Q1':'Q2',heavyFree=q1>=q2?free1:free2,missing=(q1-q1Apart)+(q2-q2Apart);
   const insight=heavyFree<0?`Ojo, ${MONTHS[state.currentMonth]} viene pesado: ${heavy} queda en negativo por ${fmt(Math.abs(heavyFree))}.`:missing>0?`${MONTHS[state.currentMonth]} va en proceso: te falta apartar ${fmt(missing)} para completar el mes.`:`${MONTHS[state.currentMonth]} va súper bien: ya tienes completados los apartados del mes.`;
 
@@ -540,14 +559,14 @@ function renderSmartDashboardBlocks(){
   document.getElementById('dashboardSmartBlocks').innerHTML=`<div class="col-span-4 bg-white rounded-2xl card-shadow border border-gray-100 p-4"><h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2"><i data-lucide="bell" class="w-4 h-4 text-durazno-500"></i>Próximos pagos</h3><div class="max-h-[420px] overflow-y-auto pr-1 pb-2">${upcoming}</div></div><div class="col-span-8 bg-white rounded-2xl card-shadow border border-gray-100 p-4"><div class="flex items-center justify-between gap-3 mb-3"><h3 class="font-bold text-gray-800 flex items-center gap-2"><i data-lucide="list-checks" class="w-4 h-4 text-azul-500"></i>Detalle de apartados del mes</h3><span class="text-[11px] text-gray-400">Resumen por tipo</span></div>${quickStats}<div class="grid grid-cols-2 gap-3 mt-3">${typeRows}</div></div>`;
 }
 function renderSummaryCards(){
-  const p=getPaymentsForMonth(state.currentMonth,state.currentYear),all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)],paymentItems=[...p.fixed,...p.inst,...p.vari],salary=state.config.salaryBiweekly||0,
-  q1=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),
-  q2=all.reduce((s,i)=>s+getAmountToSetAside(i,2),0),
-  q1Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,1),0),
-  q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0),
+  const {p,all}=getBiweeklyItems(state.currentMonth,state.currentYear),paymentItems=[...p.fixed,...p.inst,...p.vari],salary=state.config.salaryBiweekly||0,
+  q1=getBiweeklyPlannedTotal(1),
+  q2=getBiweeklyPlannedTotal(2),
+  q1Apart=getBiweeklyApartedTotal(1),
+  q2Apart=getBiweeklyApartedTotal(2),
   paidQ1=paymentItems.reduce((s,i)=>s+(i.paid&&getSplitMode(i)==='Q2 anterior + Q1 del mes de pago'&&getAmountToSetAside(i,1)>0?getPaymentAmount(i):0),0),
   paidQ2=paymentItems.reduce((s,i)=>s+(i.paid&&getSplitMode(i)!=='Q2 anterior + Q1 del mes de pago'&&getAmountToSetAside(i,2)>0?getPaymentAmount(i):0),0),
-  s1=getSavingsByQuincena(p,1),s2=getSavingsByQuincena(p,2),st=s1+s2,totalAccum=totalConfirmedSavings(state.savings),f1=salary-Math.max(q1,q1Apart),f2=salary-Math.max(q2,q2Apart);
+  s1=getSavingsByQuincena(p,1),s2=getSavingsByQuincena(p,2),st=s1+s2,totalAccum=totalConfirmedSavings(state.savings),f1=getBiweeklyFreeAmount(1),f2=getBiweeklyFreeAmount(2);
 
   const mini=(l,v,c,paid=null)=>`
     <div class="bg-white/55 border border-white/70 rounded-xl p-3">
@@ -616,10 +635,10 @@ function renderSummaryCards(){
     </div>`;
 }
 function renderBiweekly(){
-  const p=getPaymentsForMonth(state.currentMonth,state.currentYear),all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)],days=getDaysInMonth(state.currentMonth,state.currentYear);
+  const {p,all}=getBiweeklyItems(state.currentMonth,state.currentYear),days=getDaysInMonth(state.currentMonth,state.currentYear);
   const conceptCell=(item,cat)=>`<td class="py-2.5 text-xs align-top"><div class="flex items-start gap-2 min-w-0"><span class="cal-dot ${cat.dot} mt-1.5 shrink-0"></span><span class="leading-tight break-words">${escapeHtml(item.concept)}</span></div></td>`;
   const html=[1,2].map(q=>{
-    const items=all.filter(i=>getAmountToSetAside(i,q)>0),total=items.reduce((s,i)=>s+getAmountToSetAside(i,q),0),apart=items.reduce((s,i)=>s+getRealSetAsideAmount(i,q),0),free=(state.config.salaryBiweekly||0)-Math.max(total,apart);
+    const items=all.filter(i=>getAmountToSetAside(i,q)>0),total=getBiweeklyPlannedTotal(q,state.currentMonth,state.currentYear),apart=getBiweeklyApartedTotal(q,state.currentMonth,state.currentYear),free=getBiweeklyFreeAmount(q,state.currentMonth,state.currentYear);
     const hasQ1PaymentColumn=q===1&&items.some(i=>getSplitMode(i)==='Q2 anterior + Q1 del mes de pago');
     const hasPaidCol=q===2||hasQ1PaymentColumn;
     const colgroup=hasPaidCol?`<colgroup><col style="width:22%"><col style="width:12%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:18%"></colgroup>`:`<colgroup><col style="width:28%"><col style="width:14%"><col style="width:18%"><col style="width:20%"><col style="width:20%"></colgroup>`;
@@ -688,11 +707,11 @@ function closeCalendarPopover(){const pop=document.getElementById('calendarPopov
 function openCalendarPopover(day,event){event.stopPropagation();closeCalendarPopover();const calendar=document.getElementById('miniCalendar'),items=getCalendarItemsForDay(day);if(!calendar||!items.length)return;const pop=document.createElement('div');pop.id='calendarPopover';pop.className='absolute z-30 bg-white rounded-xl card-shadow border border-gray-100 p-3 text-xs w-[260px] max-w-[260px]';pop.innerHTML=`<div class="flex items-start justify-between gap-2 mb-2"><div><div class="font-bold text-gray-800">${day} de ${MONTHS[state.currentMonth]}</div><div class="text-[10px] text-gray-400">${items.length} registro${items.length===1?'':'s'} este día</div></div><button onclick="closeCalendarPopover()" class="text-gray-400 hover:text-gray-600 text-base leading-none">×</button></div><div class="max-h-56 overflow-y-auto pr-1">${items.map(item=>{const cat=getCategoryVisual(item.type),st=getStatusVisual(item.status);return `<div class="${cat.bg} ${cat.border} border rounded-lg p-2 mb-2 last:mb-0"><div class="flex justify-between gap-2 mb-1"><div class="font-semibold ${cat.text}">${escapeHtml(item.concept)}</div><span class="${st.bg} ${st.border} ${st.text} border px-2 py-0.5 rounded-full text-[10px] font-semibold">${st.label}</span></div><div class="grid grid-cols-2 gap-x-2 text-[11px]"><span>Tipo</span><span class="text-right font-medium ${cat.text}">${item.label}</span><span>Cuenta</span><span class="text-right font-medium truncate">${escapeHtml(item.card)}</span><span>Monto</span><span class="text-right font-bold">${fmt(item.amount)}</span></div></div>`;}).join('')}</div>`;calendar.appendChild(pop);const cr=calendar.getBoundingClientRect(),tr=event.currentTarget.getBoundingClientRect();let left=tr.left-cr.left+tr.width+6,top=tr.top-cr.top-6;pop.style.left=left+'px';pop.style.top=top+'px';const pr=pop.getBoundingClientRect();if(pr.right>cr.right)left=Math.max(6,tr.left-cr.left-pr.width-6);if(pr.bottom>cr.bottom)top=Math.max(6,cr.height-pr.height-6);if(top<6)top=6;pop.style.left=left+'px';pop.style.top=top+'px';}
 function renderMiniCalendar(){const m=state.currentMonth,y=state.currentYear,today=new Date(),todayDay=today.getDate(),todayMonth=today.getMonth(),todayYear=today.getFullYear(),p=getPaymentsForMonth(m,y),days=getDaysInMonth(m,y),first=getFirstDayOfMonth(m,y),dayTypes={};document.getElementById('miniCalTitle').textContent=`${MONTHS[m]} ${y}`;const addPayments=(arr,type)=>arr.forEach(item=>{[1,2].forEach(q=>{if(getAmountToSetAside(item,q)<=0)return;const due=getRealPaymentMonthYearForQuincena(item,q,m,y);if(due.month!==m||due.year!==y)return;const d=parseInt(item.date)||1;if(!dayTypes[d])dayTypes[d]=new Set();dayTypes[d].add(type);});});addPayments(p.fixed,'fixed');addPayments(p.inst,'inst');addPayments(p.vari,'vari');addPayments(p.goals||[],'sav');let html='<div class="relative"><div class="grid grid-cols-7 gap-0.5">';DAYS.forEach(d=>html+=`<div class="text-center text-[10px] font-semibold text-gray-400 py-1">${d}</div>`);for(let i=0;i<first;i++)html+='<div></div>';for(let d=1;d<=days;d++){const types=dayTypes[d];const isToday=d===todayDay&&m===todayMonth&&y===todayYear;let dots='';if(types){dots='<div class="flex gap-0.5 justify-center mt-0.5">';if(types.has('fixed'))dots+='<span class="cal-dot bg-lila-300"></span>';if(types.has('inst'))dots+='<span class="cal-dot bg-menta-300"></span>';if(types.has('vari'))dots+='<span class="cal-dot bg-durazno-300"></span>';if(types.has('sav'))dots+='<span class="cal-dot bg-azul-300"></span>';dots+='</div>';}html+=`<div ${types?`onclick="openCalendarPopover(${d}, event)"`:''} class="relative text-center py-1 rounded-lg ${types?'cursor-pointer hover:bg-lila-50':'cursor-default hover:bg-gray-50'} ${isToday?'bg-lila-100 ring-2 ring-lila-300 shadow-sm':''}"><div class="text-xs ${isToday?'text-lila-600 font-extrabold':'text-gray-600'}">${d}</div>${dots}${isToday?'<div class="text-[8px] text-lila-500 font-bold leading-none mt-0.5">hoy</div>':''}</div>`;}html+='</div></div>';document.getElementById('miniCalendar').innerHTML=html;}
 function renderMonthSummary(){
-  const p=getPaymentsForMonth(state.currentMonth,state.currentYear),all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)],salary=state.config.salaryBiweekly||0;
-  const q1Total=all.reduce((s,i)=>s+getAmountToSetAside(i,1),0),q2Total=all.reduce((s,i)=>s+getAmountToSetAside(i,2),0);
-  const q1Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,1),0),q2Apart=all.reduce((s,i)=>s+getRealSetAsideAmount(i,2),0);
+  const {p,all}=getBiweeklyItems(state.currentMonth,state.currentYear),salary=state.config.salaryBiweekly||0;
+  const q1Total=getBiweeklyPlannedTotal(1),q2Total=getBiweeklyPlannedTotal(2);
+  const q1Apart=getBiweeklyApartedTotal(1),q2Apart=getBiweeklyApartedTotal(2);
   const q1Missing=Math.max(0,q1Total-q1Apart),q2Missing=Math.max(0,q2Total-q2Apart);
-  const q1Free=salary-Math.max(q1Total,q1Apart),q2Free=salary-Math.max(q2Total,q2Apart);
+  const q1Free=getBiweeklyFreeAmount(1),q2Free=getBiweeklyFreeAmount(2);
   const monthTotal=q1Total+q2Total,monthApart=q1Apart+q2Apart,monthMissing=Math.max(0,monthTotal-monthApart),pct=monthTotal?Math.round((monthApart/monthTotal)*100):100;
   const status=(missing,total)=> total===0?{label:'Sin apartados',color:'text-gray-400',bg:'bg-gray-50',border:'border-gray-100',icon:'minus-circle'}:missing<=0?{label:'Meta completada',color:'text-menta-500',bg:'bg-menta-50',border:'border-menta-100',icon:'check-circle'}:{label:`Faltan ${fmt(missing)}`,color:'text-durazno-500',bg:'bg-durazno-50',border:'border-durazno-100',icon:'clock'};
   const qCard=(q,total,apart,missing,free)=>{const st=status(missing,total);const qLabel=q===1?'Q1 · 1ª quincena':'Q2 · 2ª quincena';const localPct=total?Math.round((apart/total)*100):100;return `<div class="${st.bg} ${st.border} border rounded-xl p-3"><div class="flex items-center justify-between gap-2 mb-2"><div class="font-bold text-gray-800 text-sm">${qLabel}</div><span class="text-[10px] px-2 py-0.5 rounded-full bg-white/70 ${st.color} font-semibold border border-white">${st.label}</span></div><div class="grid grid-cols-2 gap-2 text-xs mb-3"><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">A apartar</span><div class="font-bold text-rosa-500 text-sm">${fmt(total)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Ya apartado</span><div class="font-bold text-azul-500 text-sm">${fmt(apart)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Falta</span><div class="font-bold ${missing<=0?'text-menta-500':'text-durazno-500'} text-sm">${fmt(missing)}</div></div><div class="bg-white/70 rounded-lg p-2"><span class="text-gray-400 text-xs">Libre</span><div class="font-bold ${free>=0?'text-aqua-500':'text-red-400'} text-sm">${fmt(free)}</div></div></div><div class="flex justify-between text-xs text-gray-400 mb-1"><span>Avance apartado</span><span>${localPct}%</span></div><div class="w-full bg-white h-2 rounded-full overflow-hidden"><div class="${missing<=0?'bg-menta-400':'bg-azul-400'} h-2 rounded-full" style="width:${Math.min(100,Math.max(3,localPct))}%"></div></div></div>`;};
@@ -795,11 +814,11 @@ function getBiweeklyHealth(free, usedPct){
 function getYearBiweeklyData(){
   const salary = state.config.salaryBiweekly || 0;
   return MONTHS.map((name,month)=>{
-    const p=getPaymentsForMonth(month,state.currentYear), all=[...p.fixed,...p.inst,...p.vari,...(p.goals||[]),...makeSavingsPlanningItems(p)];
-    const q1=all.reduce((s,it)=>s+getAmountToSetAside(it,1),0), q2=all.reduce((s,it)=>s+getAmountToSetAside(it,2),0);
-    const q1Apart=all.reduce((s,it)=>s+getRealSetAsideAmount(it,1),0), q2Apart=all.reduce((s,it)=>s+getRealSetAsideAmount(it,2),0);
+    const {p,all}=getBiweeklyItems(month,state.currentYear);
+    const q1=getBiweeklyPlannedTotal(1,month,state.currentYear), q2=getBiweeklyPlannedTotal(2,month,state.currentYear);
+    const q1Apart=getBiweeklyApartedTotal(1,month,state.currentYear), q2Apart=getBiweeklyApartedTotal(2,month,state.currentYear);
     const s1=getSavingsByQuincena(p,1), s2=getSavingsByQuincena(p,2);
-    const free1=salary-Math.max(q1,q1Apart), free2=salary-Math.max(q2,q2Apart);
+    const free1=getBiweeklyFreeAmount(1,month,state.currentYear), free2=getBiweeklyFreeAmount(2,month,state.currentYear);
     const used1=salary>0?Math.min(140,Math.round((Math.max(q1,q1Apart)/salary)*100)):0;
     const used2=salary>0?Math.min(140,Math.round((Math.max(q2,q2Apart)/salary)*100)):0;
     return { name, month, q1, q2, s1, s2, free1, free2, used1, used2, h1:getBiweeklyHealth(free1,used1), h2:getBiweeklyHealth(free2,used2) };
@@ -1263,7 +1282,15 @@ function runSmokeTests(){
     console.assert(getStatusVisual('apartado').text==='text-azul-500','apartado blue');
     console.assert(getStatusVisual('pagado').text==='text-menta-500','pagado green');
     console.assert(getStatusVisual('pendiente').text==='text-durazno-500','pendiente orange');
-    console.assert((8100-Math.max(4660.50,0))===3439.50,'free amount formula ok');
+    for(let m=0;m<12;m++){
+      [1,2].forEach(q=>{
+        const planned=getBiweeklyPlannedTotal(q,m,state.currentYear);
+        const aparted=getBiweeklyApartedTotal(q,m,state.currentYear);
+        const free=getBiweeklyFreeAmount(q,m,state.currentYear);
+        const expected=(state.config.salaryBiweekly||0)-Math.max(planned,aparted);
+        console.assert(Math.abs(free-expected)<0.01,`Q${q} ${MONTHS[m]} libre consistente`);
+      });
+    }
   }catch(e){
     console.warn('Revisión interna omitida para no bloquear la app',e);
   }
