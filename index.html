@@ -1221,27 +1221,53 @@ function deleteExtraIncome(id){
 function renderExtraIncomePanel(){
   const el=document.getElementById('extraIncomePanel');
   if(!el)return;
+
   const list=getExtraIncomesForMonth(state.currentMonth,state.currentYear);
-  if(!list.length){el.innerHTML='';return;}
   const totalQ1=getExtraIncomeForQuincena(1,state.currentMonth,state.currentYear);
   const totalQ2=getExtraIncomeForQuincena(2,state.currentMonth,state.currentYear);
-  el.innerHTML=`<div class="bg-white rounded-xl card-shadow p-5 mt-4">
+
+  const rows=list.length ? list.map(x=>`<tr class="border-b border-gray-100">
+    <td class="py-2 font-semibold">${escapeHtml(x.concept||'Entrada extra')}</td>
+    <td class="py-2">${x.quincena||'Q1'}</td>
+    <td class="py-2">${x.day||1}</td>
+    <td class="py-2">${escapeHtml(x.card||'—')}</td>
+    <td class="py-2 text-right font-bold text-aqua-500">${fmt(x.amount||0)}</td>
+    <td class="py-2 text-right">
+      <button onclick="openExtraIncomeModal('${x.id}')" class="px-2 py-1 rounded bg-lila-100 text-lila-700 text-xs font-semibold mr-1">Editar</button>
+      <button onclick="deleteExtraIncome('${x.id}')" class="px-2 py-1 rounded bg-red-100 text-red-600 text-xs font-semibold">Borrar</button>
+    </td>
+  </tr>`).join('') : '';
+
+  el.innerHTML=`<div class="bg-white rounded-xl card-shadow p-5 mt-4 mb-4">
     <div class="flex items-center justify-between gap-3 mb-4">
-      <div><h3 class="font-bold flex items-center gap-2"><i data-lucide="plus-circle" class="w-4 h-4 text-aqua-500"></i>Entradas extra del mes</h3><p class="text-xs text-gray-400">Dinero adicional que se suma al disponible de Q1 o Q2.</p></div>
+      <div>
+        <h3 class="font-bold flex items-center gap-2"><i data-lucide="plus-circle" class="w-4 h-4 text-aqua-500"></i>Entradas extra del mes</h3>
+        <p class="text-xs text-gray-400">Dinero adicional que se suma al disponible de Q1 o Q2.</p>
+      </div>
       <button onclick="openExtraIncomeModal()" class="text-xs px-3 py-1.5 rounded-lg bg-aqua-100 text-aqua-600 font-semibold hover:bg-aqua-200">+ Entrada extra</button>
     </div>
     <div class="grid grid-cols-2 gap-3 mb-4 text-sm">
       <div class="bg-aqua-50 rounded-xl p-3"><span class="text-gray-500">Extra Q1</span><div class="font-bold text-aqua-500">${fmt(totalQ1)}</div></div>
       <div class="bg-aqua-50 rounded-xl p-3"><span class="text-gray-500">Extra Q2</span><div class="font-bold text-aqua-500">${fmt(totalQ2)}</div></div>
     </div>
-    <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-gray-400 border-b"><th class="text-left py-2">Concepto</th><th class="text-left py-2">Q</th><th class="text-left py-2">Día</th><th class="text-left py-2">Cuenta</th><th class="text-right py-2">Monto</th><th class="text-right py-2">Acciones</th></tr></thead><tbody>
-      ${list.map(x=>`<tr class="border-b border-gray-100"><td class="py-2 font-semibold">${escapeHtml(x.concept||'Entrada extra')}</td><td class="py-2">${x.quincena||'Q1'}</td><td class="py-2">${x.day||1}</td><td class="py-2">${escapeHtml(x.card||'—')}</td><td class="py-2 text-right font-bold text-aqua-500">${fmt(x.amount||0)}</td><td class="py-2 text-right"><button onclick="openExtraIncomeModal('${x.id}')" class="px-2 py-1 rounded bg-lila-100 text-lila-700 text-xs font-semibold mr-1">Editar</button><button onclick="deleteExtraIncome('${x.id}')" class="px-2 py-1 rounded bg-red-100 text-red-600 text-xs font-semibold">Borrar</button></td></tr>`).join('')}
-    </tbody></table></div>
+    ${list.length?`
+      <div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead><tr class="text-xs text-gray-400 border-b">
+          <th class="text-left py-2">Concepto</th>
+          <th class="text-left py-2">Q</th>
+          <th class="text-left py-2">Día</th>
+          <th class="text-left py-2">Cuenta</th>
+          <th class="text-right py-2">Monto</th>
+          <th class="text-right py-2">Acciones</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    `:`
+      <div class="bg-gray-50 rounded-xl p-4 text-sm text-gray-400 text-center">
+        Aún no hay entradas extra registradas en ${MONTHS[state.currentMonth]} ${state.currentYear}.
+      </div>
+    `}
   </div>`;
-  const fixedTitle=[...document.querySelectorAll('h3')].find(h=>h.textContent.trim().includes('Pagos fijos'));
-  const fixedCard=fixedTitle?fixedTitle.closest('.bg-white'):null;
-  if(fixedCard&&fixedCard.parentNode&&el.parentNode!==fixedCard.parentNode){fixedCard.parentNode.insertBefore(el,fixedCard);}
-  if(fixedCard&&fixedCard.parentNode&&el.nextElementSibling!==fixedCard){fixedCard.parentNode.insertBefore(el,fixedCard);}
   lucide.createIcons();
 }
 function editItem(id,col){if(col==='savings')return openSavingModal(id);const type=col==='installments'?'installment':col==='fixed'?'fixed':'variable';openRecordModal(type,id);}
