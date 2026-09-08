@@ -142,7 +142,11 @@ function accountDisplayHtml(name,size='table'){
   if(inst)return `<span class="inline-flex items-center min-w-0 align-middle">${logo}</span>`;
   return `<span class="inline-flex items-center min-w-0 align-middle"><span class="truncate">${escapeHtml(label)}</span></span>`;
 }
-const STORAGE_KEY='miplandepagos_estable_status_v4';
+const PROFILE_ID='moni';
+const PROFILE_LABEL='Moni';
+const STORAGE_KEY='miplandepagos_moni_v1';
+const LEGACY_STORAGE_KEY='miplandepagos_estable_status_v4';
+const LEGACY_MIGRATION_FLAG='miplandepagos_moni_legacy_checked_v1';
 let state={
   currentMonth:5,currentYear:2026,
   config:{salaryMonthly:20000,salaryBiweekly:10000,payDate1:1,payDate2:16,savingsGoal:5000,currency:'MXN',yearEndExtras:{bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''}},
@@ -152,6 +156,7 @@ let state={
   savings:[{id:'s1',date:15,quincena:'Q1',amount:2500,card:'Nu',month:5,year:2026},{id:'s2',date:30,quincena:'Q2',amount:2500,card:'Nu',month:5,year:2026}],
   savingsGoals:[],
   receivables:[],
+  receivablePeople:[],
   monthNotes:{},
   accounts:[{id:'a1',name:'Nu',type:'crédito',bank:'Nu',notes:'Tarjeta principal'},{id:'a2',name:'BBVA',type:'débito',bank:'BBVA',notes:''},{id:'a3',name:'Efectivo',type:'efectivo',bank:'',notes:'Gastos en efectivo'}],
   customBanks:[],
@@ -165,7 +170,40 @@ let variableViewFilter='all',variableCategoryFilter='all',variableViewSearch='',
 let calendarFilter='all';
 let selectedCalendarDay=null;
 let pendingCustomBankImage='';
-try{const saved=localStorage.getItem(STORAGE_KEY);if(saved)state=JSON.parse(saved);}catch(e){}
+// Carga únicamente el espacio privado de Moni. El storage viejo se conserva intacto para no mezclar perfiles.
+try{
+  const saved=localStorage.getItem(STORAGE_KEY);
+  if(saved){
+    const parsed=JSON.parse(saved);
+    if(parsed&&typeof parsed==='object') state=parsed;
+  }else{
+    // Migración segura de versiones antiguas: nunca copia automáticamente datos sin perfil.
+    const legacyRaw=localStorage.getItem(LEGACY_STORAGE_KEY);
+    const alreadyChecked=localStorage.getItem(LEGACY_MIGRATION_FLAG)==='1';
+    if(legacyRaw&&!alreadyChecked){
+      let legacy=null;
+      try{legacy=JSON.parse(legacyRaw);}catch(_e){}
+      const legacyProfile=String(legacy?._profile?.id||legacy?.profileId||'').toLowerCase();
+      if(legacyProfile===PROFILE_ID){
+        state=legacy;
+        state._profile={id:PROFILE_ID,label:PROFILE_LABEL};
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+        localStorage.setItem(LEGACY_MIGRATION_FLAG,'1');
+      }else if(legacyProfile&&legacyProfile!==PROFILE_ID){
+        // Es de otro perfil (por ejemplo Axel): se ignora y no se toca.
+        localStorage.setItem(LEGACY_MIGRATION_FLAG,'1');
+      }else{
+        const keepLegacy=confirm('Encontré datos de una versión anterior sin perfil. ¿Son los datos de Moni y quieres copiarlos a esta app?\n\nAceptar = conservarlos como Moni.\nCancelar = no copiarlos (no se borran).');
+        if(keepLegacy&&legacy&&typeof legacy==='object'){
+          state=legacy;
+          state._profile={id:PROFILE_ID,label:PROFILE_LABEL};
+          localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+        }
+        localStorage.setItem(LEGACY_MIGRATION_FLAG,'1');
+      }
+    }
+  }
+}catch(e){}
 if(!state.config.yearEndExtras) state.config.yearEndExtras={bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
 if(!state.config.payrollOverrides || typeof state.config.payrollOverrides!=='object') state.config.payrollOverrides={};
 if(typeof state.config.dashboardPayDayQ1==='undefined') state.config.dashboardPayDayQ1=30;
@@ -181,10 +219,13 @@ if(!Array.isArray(state.installments)) state.installments=[];
 if(!Array.isArray(state.variable)) state.variable=[];
 if(!Array.isArray(state.savings)) state.savings=[];
 if(!Array.isArray(state.receivables)) state.receivables=[];
+if(!Array.isArray(state.receivablePeople)) state.receivablePeople=[];
+// Conserva automáticamente los nombres ya usados en cobros anteriores.
+(state.receivables||[]).forEach(r=>{const n=String(r.person||'').trim();if(n&&!state.receivablePeople.some(p=>normalizeInstitutionText(p)===normalizeInstitutionText(n)))state.receivablePeople.push(n);});
 if(!Array.isArray(state.accounts)) state.accounts=[];
 if(!Array.isArray(state.customBanks)) state.customBanks=[];
 if(!Array.isArray(state.categories)) state.categories=[...DEFAULT_CATEGORIES];
-function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+function saveState(){state._profile={id:PROFILE_ID,label:PROFILE_LABEL};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 function fmt(n){
   const value=Number(n)||0;
   const hasDecimals=Math.abs(value%1)>0.000001;
@@ -333,7 +374,7 @@ function addCategoryIfNeeded(name){
   return clean;
 }
 function isFixedActiveInMonth(item,m,y){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear;if(monthIndex(m,y)<monthIndex(sm,sy))return false;if(item.hasEndDate){const em=item.endMonth??sm,ey=item.endYear??sy;if(monthIndex(m,y)>monthIndex(em,ey))return false;}return true;}
-function getFixedStatus(item,m=state.currentMonth,y=state.currentYear){if(!item.monthlyStatus)item.monthlyStatus={};const k=monthKey(m,y);if(!item.monthlyStatus[k])item.monthlyStatus[k]={apartadoQ1:false,apartadoQ2:false,paid:false};return item.monthlyStatus[k];}
+function getFixedStatus(item,m=state.currentMonth,y=state.currentYear){if(!item.monthlyStatus)item.monthlyStatus={};const k=monthKey(m,y);if(!item.monthlyStatus[k])item.monthlyStatus[k]={apartadoQ1:false,apartadoQ2:false,apartadoMes:false,paid:false};if(item.monthlyStatus[k].apartadoMes===undefined)item.monthlyStatus[k].apartadoMes=false;return item.monthlyStatus[k];}
 function getFixedPeriodText(item){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear;if(!item.hasEndDate)return `${MONTHS[sm]} ${sy} · sin fecha límite`;return `${MONTHS[sm]} ${sy} - ${MONTHS[item.endMonth??sm]} ${item.endYear??sy}`;}
 
 function getInstallmentPaymentTargets(item){
@@ -424,7 +465,7 @@ function getLiquidationSavingsTotal(m=null,y=null){
 }
 function getInstallmentNumberForMonth(item,m,y){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear;return monthIndex(m,y)-monthIndex(sm,sy)+1;}
 function isInstallmentActiveInMonth(item,m,y){const total=parseInt(item.totalMonths)||1,n=getInstallmentNumberForMonth(item,m,y);return n>=1&&n<=total;}
-function getInstallmentStatus(item,m=state.currentMonth,y=state.currentYear){if(!item.monthlyStatus)item.monthlyStatus={};const k=monthKey(m,y);if(!item.monthlyStatus[k])item.monthlyStatus[k]={apartadoQ1:false,apartadoQ2:false,paid:false};return item.monthlyStatus[k];}
+function getInstallmentStatus(item,m=state.currentMonth,y=state.currentYear){if(!item.monthlyStatus)item.monthlyStatus={};const k=monthKey(m,y);if(!item.monthlyStatus[k])item.monthlyStatus[k]={apartadoQ1:false,apartadoQ2:false,apartadoMes:false,paid:false};if(item.monthlyStatus[k].apartadoMes===undefined)item.monthlyStatus[k].apartadoMes=false;return item.monthlyStatus[k];}
 function getPaidInstallmentMonthsUntil(item,m=state.currentMonth,y=state.currentYear){
   const total=parseInt(item.totalMonths)||1;
   const sm=item.startMonth??item.month??0, sy=item.startYear??item.year??state.currentYear;
@@ -537,7 +578,7 @@ function isVariableRelevantInMonth(item,m,y){
   }
   return false;
 }
-function getPaymentsForMonth(m,y){const fixed=state.fixed.filter(p=>isFixedActiveInMonth(p,m,y)).map(p=>{const s=getFixedStatus(p,m,y);return {...p,__collection:'fixed',__viewMonth:m,__viewYear:y,month:m,year:y,paid:!!s.paid,paidQ1:!!s.paidQ1,paidQ2:!!s.paidQ2,apartadoQ1:!!s.apartadoQ1,apartadoQ2:!!s.apartadoQ2};});const inst=state.installments.filter(p=>isInstallmentRelevantInMonth(p,m,y)).map(p=>{const s=getInstallmentStatus(p,m,y);const current=Math.max(1,Math.min(parseInt(p.totalMonths)||1,getInstallmentNumberForMonth(p,m,y)));return {...p,__collection:'installments',__viewMonth:m,__viewYear:y,month:m,year:y,currentMonth:current,paid:!!s.paid,paidQ1:!!s.paidQ1,paidQ2:!!s.paidQ2,apartadoQ1:!!s.apartadoQ1,apartadoQ2:!!s.apartadoQ2};});const vari=state.variable.filter(p=>isVariableRelevantInMonth(p,m,y)).map(p=>({...p,__collection:'variable',__viewMonth:m,__viewYear:y}));const goals=getGoalContributionItems(m,y);return {fixed,inst,vari,goals,sav:state.savings.filter(p=>p.month===m&&p.year===y)};}
+function getPaymentsForMonth(m,y){const fixed=state.fixed.filter(p=>isFixedActiveInMonth(p,m,y)).map(p=>{const s=getFixedStatus(p,m,y);return {...p,__collection:'fixed',__viewMonth:m,__viewYear:y,month:m,year:y,paid:!!s.paid,paidQ1:!!s.paidQ1,paidQ2:!!s.paidQ2,apartadoQ1:!!s.apartadoQ1,apartadoQ2:!!s.apartadoQ2,apartadoMes:!!s.apartadoMes};});const inst=state.installments.filter(p=>isInstallmentRelevantInMonth(p,m,y)).map(p=>{const s=getInstallmentStatus(p,m,y);const current=Math.max(1,Math.min(parseInt(p.totalMonths)||1,getInstallmentNumberForMonth(p,m,y)));return {...p,__collection:'installments',__viewMonth:m,__viewYear:y,month:m,year:y,currentMonth:current,paid:!!s.paid,paidQ1:!!s.paidQ1,paidQ2:!!s.paidQ2,apartadoQ1:!!s.apartadoQ1,apartadoQ2:!!s.apartadoQ2,apartadoMes:!!s.apartadoMes};});const vari=state.variable.filter(p=>isVariableRelevantInMonth(p,m,y)).map(p=>({...p,__collection:'variable',__viewMonth:m,__viewYear:y}));const goals=getGoalContributionItems(m,y);return {fixed,inst,vari,goals,sav:state.savings.filter(p=>p.month===m&&p.year===y)};}
 function getPaymentCollection(item){if(item.__collection)return item.__collection;if(state.fixed.some(p=>p.id===item.id))return 'fixed';if(state.installments.some(p=>p.id===item.id))return 'installments';if(state.variable.some(p=>p.id===item.id))return 'variable';if((state.savingsGoals||[]).some(p=>p.id===item.id))return 'goalContrib';if(state.savings.some(p=>p.id===item.id))return 'savings';return '';}
 function getPaymentType(item){const c=getPaymentCollection(item);return c==='fixed'?'fijo':c==='installments'?'meses':c==='variable'?'variado':'ahorro';}
 function getPaymentAmount(item){return parseFloat(item.amount||item.estimatedAmount||0)||0;}
@@ -558,6 +599,32 @@ function legacyPlanToNew(mode){
 }
 function getPaymentPlan(item){return item.paymentPlan||legacyPlanToNew(getSplitMode(item)).paymentPlan;}
 function getApartPlan(item){return item.apartPlan||legacyPlanToNew(getSplitMode(item)).apartPlan;}
+function isMonthlyApartPlan(item){return getApartPlan(item)==='Apartado mensual';}
+function getMonthlySetAsidePlanAmount(item,m=state.currentMonth,y=state.currentYear){
+  if(!isMonthlyApartPlan(item))return 0;
+  const col=getPaymentCollection(item);
+  if(col==='fixed'&&!isFixedActiveInMonth(item,m,y))return 0;
+  if(col==='installments'&&!isInstallmentActiveInMonth(item,m,y))return 0;
+  if(col==='variable'&&!(item.month===m&&item.year===y))return 0;
+  return getPaymentAmount(item);
+}
+function isMonthlySetAside(item,m=state.currentMonth,y=state.currentYear){
+  if(!isMonthlyApartPlan(item))return false;
+  const col=getPaymentCollection(item);
+  if(col==='fixed')return !!getFixedStatus(item,m,y).apartadoMes;
+  if(col==='installments')return !!getInstallmentStatus(item,m,y).apartadoMes;
+  if(col==='variable')return !!item.apartadoMes;
+  return false;
+}
+function setMonthlySetAsideState(item,value,m=state.currentMonth,y=state.currentYear){
+  const col=getPaymentCollection(item);
+  if(col==='fixed')getFixedStatus(item,m,y).apartadoMes=!!value;
+  else if(col==='installments')getInstallmentStatus(item,m,y).apartadoMes=!!value;
+  else if(col==='variable')item.apartadoMes=!!value;
+}
+function getMonthlySetAsideRealAmount(item,m=state.currentMonth,y=state.currentYear){
+  return isMonthlySetAside(item,m,y)?getMonthlySetAsidePlanAmount(item,m,y):0;
+}
 function getManualAmountForQ(item,q,total=0){
   const v=q===1?(parseFloat(item.manualQ1)||0):(parseFloat(item.manualQ2)||0);
   return v>0?v:total;
@@ -622,6 +689,7 @@ function getAmountToSetAside(item,q){
     return goal?getGoalContributionAmount(goal,q):0;
   }
   const amount=getPaymentAmount(item),plan=getApartPlan(item),collection=getPaymentCollection(item);
+  if(plan==='Apartado mensual')return 0;
   const halfAmount=(collection==='installments' && (parseFloat(item.quincenaAmount)||0)>0) ? (parseFloat(item.quincenaAmount)||0) : amount/2;
   const viewMonth=item.__viewMonth??item.month??state.currentMonth;
   const viewYear=item.__viewYear??item.year??state.currentYear;
@@ -815,7 +883,7 @@ function renderPaidCheckboxCell(item,q,col){
 }
 function getPaymentStatusForQuincena(item,q){if(getPaymentCollection(item)==='goalContrib')return isSetAside(item,q)?'apartado':'pendiente';if(isPaidForQuincena(item,q))return 'pagado';if(isSetAside(item,q))return 'apartado';return 'pendiente';}
 function getPaymentStatusForDay(item,day){const c=getPaymentCollection(item);if(c==='savings')return 'apartado';if(item.paid)return 'pagado';const q=day<=15?1:2;if(isSetAside(item,q))return 'apartado';return 'pendiente';}
-function getFinalStatusLabel(item){const c=getPaymentCollection(item);if(c==='savings')return 'Apartado';if(item.paid)return 'Pagado';if(item.apartadoQ1||item.apartadoQ2)return 'Apartado';return 'Pendiente';}
+function getFinalStatusLabel(item){const c=getPaymentCollection(item);if(c==='savings')return 'Apartado';if(item.paid)return 'Pagado';if(isMonthlyApartPlan(item)&&isMonthlySetAside(item,item.__viewMonth??state.currentMonth,item.__viewYear??state.currentYear))return 'Apartado';if(item.apartadoQ1||item.apartadoQ2)return 'Apartado';return 'Pendiente';}
 
 function render(){renderMonthTabs();if(currentView==='dashboard')renderDashboardView();else if(currentView==='monthly')renderMonthlyView();else if(currentView==='biweekly')renderBiweeklyView();else if(currentView==='fixed')renderFixedView();else if(currentView==='installments')renderInstallmentsView();else if(currentView==='variable')renderVariableView();else if(currentView==='savings')renderSavingsView();else if(currentView==='annual')renderAnnualView();else if(currentView==='config')renderConfigView();renderSidebar();lucide.createIcons();}
 function renderMonthTabs(){
@@ -1005,6 +1073,30 @@ function getMonthlyDashboardItems(){
 }
 
 
+function getReceivablePeople(){
+  const names=[...(state.receivablePeople||[])];
+  (state.receivables||[]).forEach(r=>{const n=String(r.person||'').trim();if(n)names.push(n);});
+  const seen=new Set();
+  return names.filter(n=>{const k=normalizeInstitutionText(n);if(!k||seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>a.localeCompare(b,'es'));
+}
+function showReceivablePersonCreator(){
+  const panel=document.getElementById('receivablePersonCreator');if(!panel)return;
+  panel.classList.remove('hidden');
+  const input=document.getElementById('receivablePersonName');if(input){input.value='';setTimeout(()=>input.focus(),0);}
+}
+function hideReceivablePersonCreator(){document.getElementById('receivablePersonCreator')?.classList.add('hidden');}
+function saveReceivablePerson(){
+  const input=document.getElementById('receivablePersonName');
+  const name=String(input?.value||'').trim();
+  if(!name){alert('Escribe el nombre de la persona.');return;}
+  if(!Array.isArray(state.receivablePeople))state.receivablePeople=[];
+  const exists=getReceivablePeople().some(p=>normalizeInstitutionText(p)===normalizeInstitutionText(name));
+  if(exists){alert('Esa persona ya está guardada.');return;}
+  state.receivablePeople.push(name);
+  saveState();
+  openReceivablesModal();
+  setTimeout(()=>{const sel=document.querySelector('select[name="person"]');if(sel)sel.value=name;},0);
+}
 function getReceivablesForMonth(m=state.currentMonth,y=state.currentYear){
   return (state.receivables||[]).filter(r=>parseInt(r.month)===parseInt(m)&&parseInt(r.year)===parseInt(y));
 }
@@ -1016,6 +1108,7 @@ function getReceivableSummary(m=state.currentMonth,y=state.currentYear){
 function openReceivablesModal(){
   const summary=getReceivableSummary();
   const accounts=getAccounts();
+  const people=getReceivablePeople();
   const totalRegistered=summary.all.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const collectedRows=summary.all.filter(r=>r.collected);
   const totalCollected=collectedRows.reduce((s,r)=>s+(Number(r.amount)||0),0);
@@ -1072,8 +1165,15 @@ function openReceivablesModal(){
 
     <form onsubmit="saveReceivable(event)" class="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
       <div class="flex items-start justify-between gap-3 mb-4"><div><div class="font-bold text-gray-700 text-[13px]">Registrar compra de tercero</div><div class="text-[10px] text-gray-400 mt-0.5">No se suma como gasto personal; solo se registra como dinero por cobrar.</div></div><span class="w-8 h-8 rounded-xl bg-white border border-gray-100 text-lila-500 flex items-center justify-center"><i data-lucide="plus" class="w-4 h-4"></i></span></div>
+      <div id="receivablePersonCreator" class="hidden mb-3 rounded-xl border border-lila-100 bg-lila-50/60 p-3">
+        <div class="text-[10.5px] font-bold text-gray-700 mb-2 flex items-center gap-1.5"><i data-lucide="user-plus" class="w-3.5 h-3.5 text-lila-500"></i>Nueva persona</div>
+        <div class="flex items-center gap-2"><input id="receivablePersonName" type="text" placeholder="Ej. Mau, Axel, Mamá..." onkeydown="if(event.key==='Enter'){event.preventDefault();saveReceivablePerson();}" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-[11.5px] bg-white focus:outline-none focus:ring-2 focus:ring-lila-100"><button type="button" onclick="saveReceivablePerson()" class="px-3 py-2 rounded-xl bg-lila-500 text-white text-[10.5px] font-bold">Guardar</button><button type="button" onclick="hideReceivablePersonCreator()" class="px-2.5 py-2 rounded-xl bg-white border border-gray-200 text-gray-500 text-[10.5px] font-semibold">Cancelar</button></div>
+      </div>
       <div class="grid grid-cols-2 gap-3 mb-3">
-        <div><label class="block text-[10.5px] font-semibold text-gray-500 mb-1.5">Persona</label><input name="person" required placeholder="Ej. Axel" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[12px] bg-white focus:outline-none focus:ring-2 focus:ring-lila-100"></div>
+        <div>
+          <div class="flex items-center justify-between gap-2 mb-1.5"><label class="block text-[10.5px] font-semibold text-gray-500">Persona</label><button type="button" onclick="showReceivablePersonCreator()" class="text-[9.5px] font-bold text-lila-500 hover:text-lila-600 inline-flex items-center gap-1"><i data-lucide="user-plus" class="w-3.5 h-3.5"></i>Añadir persona</button></div>
+          <select name="person" required class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[12px] bg-white focus:outline-none focus:ring-2 focus:ring-lila-100"><option value="">${people.length?'Selecciona una persona':'Primero añade una persona'}</option>${people.map(person=>`<option value="${escapeHtml(person)}">${escapeHtml(person)}</option>`).join('')}</select>
+        </div>
         <div><label class="block text-[10.5px] font-semibold text-gray-500 mb-1.5">Concepto</label><input name="concept" required placeholder="Ej. Boletos de avión" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[12px] bg-white focus:outline-none focus:ring-2 focus:ring-lila-100"></div>
       </div>
       <div class="grid grid-cols-2 gap-3 mb-3">
@@ -1089,7 +1189,11 @@ function openReceivablesModal(){
 function saveReceivable(event){
   event.preventDefault();
   const f=new FormData(event.target);
-  state.receivables.push({id:uid(),person:String(f.get('person')||'').trim(),concept:String(f.get('concept')||'').trim(),amount:Number(f.get('amount'))||0,account:String(f.get('account')||''),month:state.currentMonth,year:state.currentYear,collected:false});
+  const person=String(f.get('person')||'').trim();
+  if(!person){alert('Selecciona o añade una persona.');return;}
+  if(!Array.isArray(state.receivablePeople))state.receivablePeople=[];
+  if(!state.receivablePeople.some(p=>normalizeInstitutionText(p)===normalizeInstitutionText(person)))state.receivablePeople.push(person);
+  state.receivables.push({id:uid(),person,concept:String(f.get('concept')||'').trim(),amount:Number(f.get('amount'))||0,account:String(f.get('account')||''),month:state.currentMonth,year:state.currentYear,collected:false});
   saveState();
   openReceivablesModal();
 }
@@ -1122,7 +1226,7 @@ function renderDashboardMonthlyPanel(){
   const totalPaid=rowsAll.reduce((s,r)=>s+r.paid,0);
   const pendingApart=Math.max(0,totalPlan-totalApart);
   const pendingPay=Math.max(0,totalPayTarget-totalPaid);
-  const free=getBiweeklyFreeAmount(1,state.currentMonth,state.currentYear)+getBiweeklyFreeAmount(2,state.currentMonth,state.currentYear);
+  const free=income-Math.max(totalPlan,totalApart);
   const apartPct=totalPlan>0?Math.min(100,Math.round(totalApart/totalPlan*100)):0;
   const paidPct=totalPayTarget>0?Math.min(100,Math.round(totalPaid/totalPayTarget*100)):0;
 
@@ -1140,17 +1244,9 @@ function renderDashboardMonthlyPanel(){
   const receivableSummary=getReceivableSummary(state.currentMonth,state.currentYear);
   const pendingApartCount=rowsAll.filter(r=>!r.apartComplete).length;
 
-  const monthlyStatusKey=monthlyBoardFilter==='pending'?'pendiente':monthlyBoardFilter;
-  let rows=rowsAll.filter(r=>monthlyBoardFilter==='all'?true:r.status===monthlyStatusKey);
-  const search=(monthlyBoardSearch||'').trim().toLowerCase();
-  if(search){
-    rows=rows.filter(r=>[r.concept,r.type,r.account,r.qLabel,r.dateLabel].some(v=>String(v||'').toLowerCase().includes(search)));
-  }
-  const pageSize=8;
-  const totalPages=Math.max(1,Math.ceil(rows.length/pageSize));
-  monthlyBoardPage=Math.min(Math.max(1,monthlyBoardPage),totalPages);
-  const start=(monthlyBoardPage-1)*pageSize;
-  const pageRows=rows.slice(start,start+pageSize);
+  const rows=getFilteredMonthlyBoardRows(state.currentMonth,state.currentYear);
+  const pageRows=rows; // Lista continua: sin páginas ni ventanas.
+  monthlyBoardPage=1;
 
   const commitmentsMap={};
   rowsAll.forEach(r=>{
@@ -1332,12 +1428,17 @@ function renderDashboardMonthlyPanel(){
               ${filterButton('apartado','Apartados',counts.apartado,'bg-azul-50 text-azul-500 border-azul-100')}
               ${filterButton('pagado','Pagados',counts.pagado,'bg-menta-50 text-menta-500 border-menta-100')}
             </div>
-            <div class="flex items-center gap-2"><div class="relative"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300"></i><input value="${escapeHtml(monthlyBoardSearch)}" oninput="setMonthlyBoardSearch(this.value)" placeholder="Buscar un concepto..." class="w-52 border border-gray-100 rounded-xl pl-8 pr-3 py-2 text-[10.5px] focus:outline-none focus:ring-2 focus:ring-lila-100"></div><button onclick="resetMonthlyBoardFilters()" title="Limpiar búsqueda y filtros" class="w-9 h-9 rounded-xl border border-lila-100 bg-lila-50 text-lila-500 flex items-center justify-center hover:bg-lila-100 transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button></div>
+            <div class="flex items-center gap-2 flex-wrap justify-end">
+              <button onclick="apartAllMonthlyBoard()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-azul-100 bg-azul-50 text-azul-500 text-[10px] font-bold hover:bg-azul-100 transition" title="Marcar como apartado todo lo visible"><i data-lucide="wallet-check" class="w-3.5 h-3.5"></i>Apartar todo</button>
+              <button onclick="payAllMonthlyBoard()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-menta-100 bg-menta-50 text-menta-600 text-[10px] font-bold hover:bg-menta-100 transition" title="Marcar como pagado todo lo visible que pueda pagarse"><i data-lucide="circle-check-big" class="w-3.5 h-3.5"></i>Pagar todo</button>
+              <div class="relative"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300"></i><input value="${escapeHtml(monthlyBoardSearch)}" oninput="setMonthlyBoardSearch(this.value)" placeholder="Buscar un concepto..." class="w-52 border border-gray-100 rounded-xl pl-8 pr-3 py-2 text-[10.5px] focus:outline-none focus:ring-2 focus:ring-lila-100"></div>
+              <button onclick="resetMonthlyBoardFilters()" title="Limpiar búsqueda y filtros" class="w-9 h-9 rounded-xl border border-lila-100 bg-lila-50 text-lila-500 flex items-center justify-center hover:bg-lila-100 transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>
+            </div>
           </div>
           <div class="rounded-xl border border-gray-100 overflow-hidden">
             <div class="overflow-x-auto"><table class="w-full min-w-[760px] text-[10px]"><thead class="bg-gray-50/70"><tr class="text-[10px] text-gray-400"><th class="text-left px-3 py-2 font-semibold">Concepto</th><th class="text-left px-2 py-2 font-semibold">Tipo</th><th class="text-left px-2 py-2 font-semibold">Tarjeta / Cuenta</th><th class="text-left px-2 py-2 font-semibold">Fecha</th><th class="text-left px-2 py-2 font-semibold">Monto</th><th class="text-center px-2 py-2 font-semibold">Apartado</th><th class="text-center px-2 py-2 font-semibold">Pagado</th><th class="text-left px-2 py-2 font-semibold">Estado</th></tr></thead><tbody>${rowHtml}</tbody></table></div>
           </div>
-          <div class="flex items-center justify-between gap-3 mt-3"><div class="text-[10px] text-gray-400">Mostrando ${pageRows.length} de ${rows.length} registros</div><div class="flex items-center gap-1">${Array.from({length:totalPages},(_,i)=>`<button onclick="setMonthlyBoardPage(${i+1})" class="w-7 h-7 rounded-lg border text-[10px] font-semibold ${monthlyBoardPage===i+1?'bg-lila-100 text-lila-600 border-lila-200':'bg-white text-gray-400 border-gray-100'}">${i+1}</button>`).join('')}</div></div>
+          <div class="flex items-center justify-between gap-3 mt-3"><div class="text-[10px] text-gray-400">Mostrando ${rows.length} registros en una sola lista</div></div>
         </div>
       </div>
     </div>`;
@@ -1352,6 +1453,8 @@ function getSetAsideSummaryForCollection(collection,m=state.currentMonth,y=state
   const q2Plan=arr.reduce((s,i)=>s+getAmountToSetAside(i,2),0);
   const q1Apart=arr.reduce((s,i)=>s+(isSetAside(i,1)?getAmountToSetAside(i,1):0),0);
   const q2Apart=arr.reduce((s,i)=>s+(isSetAside(i,2)?getAmountToSetAside(i,2):0),0);
+  const monthlyPlan=arr.reduce((s,i)=>s+getMonthlySetAsidePlanAmount(i,m,y),0);
+  const monthlyApart=arr.reduce((s,i)=>s+getMonthlySetAsideRealAmount(i,m,y),0);
   let prevQ2Plan=0,prevQ2Apart=0;
   if(collection==='installments'){
     const prev=addMonthOffset(m,y,-1);
@@ -1366,16 +1469,18 @@ function getSetAsideSummaryForCollection(collection,m=state.currentMonth,y=state
       if(status.apartadoQ2)prevQ2Apart+=amount;
     });
   }
-  const totalPlan=q1Plan+q2Plan+prevQ2Plan;
-  const totalApart=q1Apart+q2Apart+prevQ2Apart;
-  return {q1Plan,q2Plan,q1Apart,q2Apart,prevQ2Plan,prevQ2Apart,totalPlan,totalApart,missing:Math.max(0,totalPlan-totalApart)};
+  const totalPlan=q1Plan+q2Plan+prevQ2Plan+monthlyPlan;
+  const totalApart=q1Apart+q2Apart+prevQ2Apart+monthlyApart;
+  return {q1Plan,q2Plan,q1Apart,q2Apart,monthlyPlan,monthlyApart,prevQ2Plan,prevQ2Apart,totalPlan,totalApart,missing:Math.max(0,totalPlan-totalApart)};
 }
 function renderSetAsideMiniSummary(collection){
   const s=getSetAsideSummaryForCollection(collection);
   const pct=s.totalPlan?Math.round((s.totalApart/s.totalPlan)*100):100;
   const hasPrevQ2=collection==='installments' && s.prevQ2Plan>0;
-  const grid=hasPrevQ2?'grid-cols-5':'grid-cols-4';
+  const hasMonthly=s.monthlyPlan>0;
+  const grid=hasPrevQ2&&hasMonthly?'grid-cols-6':(hasPrevQ2||hasMonthly)?'grid-cols-5':'grid-cols-4';
   const prevCard=hasPrevQ2?`<div class="bg-lila-50 rounded-xl p-2"><span class="text-gray-400">Q2 anterior</span><div class="font-bold text-lila-500">${fmt(s.prevQ2Apart)}</div><div class="text-[10px] text-gray-400">de ${fmt(s.prevQ2Plan)}</div></div>`:'';
+  const monthlyCard=hasMonthly?`<div class="bg-azul-50 rounded-xl p-2"><span class="text-gray-400">Fondo mensual</span><div class="font-bold text-azul-500">${fmt(s.monthlyApart)}</div><div class="text-[10px] text-gray-400">de ${fmt(s.monthlyPlan)}</div></div>`:'';
   return `<div class="bg-white border border-gray-100 rounded-2xl card-shadow p-3 mb-4">
     <div class="flex items-center justify-between gap-3 mb-2">
       <div class="flex items-center gap-2 font-bold text-gray-800"><i data-lucide="piggy-bank" class="w-4 h-4 text-azul-500"></i>Apartado de esta categoría</div>
@@ -1385,6 +1490,7 @@ function renderSetAsideMiniSummary(collection){
       <div class="bg-azul-50 rounded-xl p-2"><span class="text-gray-400">Q1 apartado</span><div class="font-bold text-azul-500">${fmt(s.q1Apart)}</div><div class="text-[10px] text-gray-400">de ${fmt(s.q1Plan)}</div></div>
       <div class="bg-azul-50 rounded-xl p-2"><span class="text-gray-400">Q2 actual</span><div class="font-bold text-azul-500">${fmt(s.q2Apart)}</div><div class="text-[10px] text-gray-400">de ${fmt(s.q2Plan)}</div></div>
       ${prevCard}
+      ${monthlyCard}
       <div class="bg-menta-50 rounded-xl p-2"><span class="text-gray-400">Total apartado</span><div class="font-bold text-menta-500">${fmt(s.totalApart)}</div><div class="text-[10px] text-gray-400">${pct}% del plan</div></div>
       ${s.missing<=0
         ? `<div class="bg-azul-50 rounded-xl p-2"><span class="text-gray-400">Apartado completo</span><div class="mt-1"><span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/70 text-azul-500 border border-azul-100"><i data-lucide="wallet" class="w-3.5 h-3.5"></i></span></div><div class="text-[10px] text-azul-500 font-medium">sin pendientes</div></div>`
@@ -1404,8 +1510,8 @@ function makeSavingsPlanningItems(p){
     displayAmount:getSavingPlannedAmount(s)
   }));
 }
-function getPlanTotal(arr){return (arr||[]).reduce((s,i)=>s+getAmountToSetAside(i,1)+getAmountToSetAside(i,2),0);}
-function getApartTotal(arr){return (arr||[]).reduce((s,i)=>s+getRealSetAsideAmount(i,1)+getRealSetAsideAmount(i,2),0);}
+function getPlanTotal(arr){return (arr||[]).reduce((s,i)=>s+(isMonthlyApartPlan(i)?getMonthlySetAsidePlanAmount(i,i.__viewMonth??state.currentMonth,i.__viewYear??state.currentYear):getAmountToSetAside(i,1)+getAmountToSetAside(i,2)),0);}
+function getApartTotal(arr){return (arr||[]).reduce((s,i)=>s+(isMonthlyApartPlan(i)?getMonthlySetAsideRealAmount(i,i.__viewMonth??state.currentMonth,i.__viewYear??state.currentYear):getRealSetAsideAmount(i,1)+getRealSetAsideAmount(i,2)),0);}
 function getBiweeklyItems(m=state.currentMonth,y=state.currentYear){
   const p=getPaymentsForMonth(m,y);
   const savingsItems=makeSavingsPlanningItems(p);
@@ -1499,6 +1605,7 @@ function renderSummaryCards(){
   q2Salary=getExactSalaryForQuincena(2),
   q1=getBiweeklyPlannedTotal(1),
   q2=getBiweeklyPlannedTotal(2),
+  monthlyFundPlan=[...p.fixed,...p.inst,...p.vari].reduce((s,i)=>s+getMonthlySetAsidePlanAmount(i,state.currentMonth,state.currentYear),0),
   s1=getSavingsByQuincena(p,1),
   s2=getSavingsByQuincena(p,2),
   st=s1+s2,
@@ -1565,8 +1672,8 @@ function renderSummaryCards(){
 
   document.getElementById('summaryCards').innerHTML=`
     ${standardCard('lila','banknote','Sueldo del mes',q1Salary+q2Salary,q1Salary,q2Salary)}
-    ${standardCard('rosa','credit-card','Total a pagar del mes',q1+q2,q1,q2)}
-    ${standardCard('aqua','wallet','Dinero libre del mes',f1+f2,f1,f2)}
+    ${standardCard('rosa','credit-card','Total a pagar del mes',q1+q2+monthlyFundPlan,q1,q2)}
+    ${standardCard('aqua','wallet','Dinero libre del mes',(q1Salary+q2Salary+getExtraIncomeForQuincena(1)+getExtraIncomeForQuincena(2))-(q1+q2+monthlyFundPlan),f1,f2)}
     ${standardCard('azul','piggy-bank','Ahorro del mes',st,s1,s2)}`;
 }
 
@@ -1779,7 +1886,30 @@ function renderBiweekly(){
     </section>`;
   }).join('');
 
-  document.getElementById('biweeklyContent').innerHTML=html+``;
+  const monthlyFundRows=getMonthlyBoardRows(state.currentMonth,state.currentYear).filter(r=>r.monthlyFund);
+  const monthlyFundBlock=monthlyFundRows.length?`<section class="bg-white border border-azul-100 rounded-2xl p-4 card-shadow mt-4">
+    <div class="flex items-start justify-between gap-3 mb-3">
+      <div>
+        <div class="flex items-center gap-2"><span class="w-8 h-8 rounded-xl bg-azul-50 border border-azul-100 text-azul-500 flex items-center justify-center"><i data-lucide="wallet-cards" class="w-4 h-4"></i></span><div><h4 class="text-sm font-bold text-gray-800">Apartados mensuales</h4><p class="text-[10.5px] text-gray-400 mt-0.5">Estos pagos se juntan durante el mes y no cargan una quincena específica.</p></div></div>
+      </div>
+      <span class="text-[10px] px-2.5 py-1 rounded-full bg-azul-50 border border-azul-100 text-azul-500 font-semibold">${monthlyFundRows.filter(r=>r.apartComplete).length}/${monthlyFundRows.length} apartados</span>
+    </div>
+    <div class="rounded-xl border border-gray-100 overflow-hidden">
+      <table class="w-full text-[10px]">
+        <thead class="bg-gray-50/70 text-gray-400"><tr><th class="text-left px-3 py-2">Concepto</th><th class="text-left px-2 py-2">Tipo</th><th class="text-left px-2 py-2">Meta del mes</th><th class="text-center px-2 py-2">Apartado</th><th class="text-center px-2 py-2">Pagado</th><th class="text-left px-2 py-2">Estado</th></tr></thead>
+        <tbody>${monthlyFundRows.map(r=>{const st=getStatusVisual(r.status);return `<tr class="border-t border-gray-100 first:border-t-0">
+          <td class="px-3 py-2.5 font-semibold text-gray-700">${escapeHtml(r.concept)}</td>
+          <td class="px-2 py-2.5 text-gray-500">${r.type==='meses'?'A meses':r.type==='fijo'?'Fijo':'Variado'}</td>
+          <td class="px-2 py-2.5 font-bold text-azul-500">${fmt(r.plan)}</td>
+          <td class="px-2 py-2.5 text-center"><input type="checkbox" ${r.apartComplete?'checked':''} onchange="toggleMonthlyBoardApart('${r.id}','${r.col}')" class="w-4 h-4 accent-azul-500"></td>
+          <td class="px-2 py-2.5 text-center">${r.canPay?`<input type="checkbox" ${r.paidComplete?'checked':''} onchange="toggleMonthlyBoardPaid('${r.id}','${r.col}')" class="w-4 h-4 accent-menta-500">`:'<span class="text-gray-300">—</span>'}</td>
+          <td class="px-2 py-2.5"><span class="inline-flex items-center px-2 py-1 rounded-full border text-[9.5px] font-semibold ${st.bg} ${st.border} ${st.text}">${st.label}</span></td>
+        </tr>`;}).join('')}</tbody>
+      </table>
+    </div>
+  </section>`:'';
+
+  document.getElementById('biweeklyContent').innerHTML=html+monthlyFundBlock;
 }
 
 function toggleApartado(id,col,q){
@@ -2380,21 +2510,27 @@ function getMonthlyBoardRows(m=state.currentMonth,y=state.currentYear){
     const col=getPaymentCollection(item);
     const type=getPaymentType(item);
     const category=getCategoryVisual(type);
+    const monthlyFund=isMonthlyApartPlan(item);
     const qList=[1,2].filter(q=>getAmountToSetAside({...item,__viewMonth:m,__viewYear:y},q)>0);
-    if(!qList.length)return null;
-    const plan=qList.reduce((s,q)=>s+getAmountToSetAside({...item,__viewMonth:m,__viewYear:y},q),0);
-    const apart=qList.reduce((s,q)=>s+getRealSetAsideAmount({...item,__viewMonth:m,__viewYear:y},q),0);
+    if(!qList.length&&!monthlyFund)return null;
+    const plan=monthlyFund
+      ? getMonthlySetAsidePlanAmount(item,m,y)
+      : qList.reduce((s,q)=>s+getAmountToSetAside({...item,__viewMonth:m,__viewYear:y},q),0);
+    const apart=monthlyFund
+      ? getMonthlySetAsideRealAmount(item,m,y)
+      : qList.reduce((s,q)=>s+getRealSetAsideAmount({...item,__viewMonth:m,__viewYear:y},q),0);
     // El ahorro solo se APARTA: nunca participa como "pagado" en la vista mensual.
     const isSavingsOnly=col==='goalContrib'||col==='savings'||type==='ahorro';
-    const payableQs=isSavingsOnly?[]:qList.filter(q=>shouldShowPaidCheckbox({...item,__viewMonth:m,__viewYear:y},q,m,y));
+    const payableQs=isSavingsOnly?[]:[1,2].filter(q=>shouldShowPaidCheckbox({...item,__viewMonth:m,__viewYear:y},q,m,y));
     const payTarget=payableQs.reduce((s,q)=>s+getPaymentPlanAmountForQ({...item,__viewMonth:m,__viewYear:y},q),0);
     const paid=payableQs.reduce((s,q)=>s+(isPaidForQuincena({...item,__viewMonth:m,__viewYear:y},q)?getPaymentPlanAmountForQ({...item,__viewMonth:m,__viewYear:y},q):0),0);
-    const apartComplete=qList.every(q=>isSetAside({...item,__viewMonth:m,__viewYear:y},q));
+    const apartComplete=monthlyFund?isMonthlySetAside(item,m,y):qList.every(q=>isSetAside({...item,__viewMonth:m,__viewYear:y},q));
     const canPay=payableQs.length>0;
     const paidComplete=canPay&&payableQs.every(q=>isPaidForQuincena({...item,__viewMonth:m,__viewYear:y},q));
     const status=isSavingsOnly?(apartComplete?'apartado':'pendiente'):(paidComplete&&payTarget>0?'pagado':apartComplete?'apartado':'pendiente');
-    const dueLabels=[...new Set(qList.map(q=>getPaymentDueLabel({...item,__viewMonth:m,__viewYear:y},q,m,y)))];
-    const qLabel=qList.map(q=>`Q${q}`).join(' + ');
+    const labelQs=qList.length?qList:payableQs;
+    const dueLabels=[...new Set(labelQs.map(q=>getPaymentDueLabel({...item,__viewMonth:m,__viewYear:y},q,m,y)))];
+    const qLabel=monthlyFund?'Mes':qList.map(q=>`Q${q}`).join(' + ');
     const concept=col==='installments'
       ? (qList.length===1?getInstallmentDisplayConcept(item,qList[0]):(item.concept||'Pago a meses'))
       : (item.concept||'Registro');
@@ -2411,8 +2547,9 @@ function getMonthlyBoardRows(m=state.currentMonth,y=state.currentYear){
       category,
       qList,
       qLabel,
+      monthlyFund,
       account:account||'Sin cuenta',
-      dateLabel:dueLabels.join(' · '),
+      dateLabel:dueLabels.join(' · ')||(monthlyFund?'Durante el mes':'-'),
       plan,apart,payTarget,paid,
       apartComplete,
       paidComplete,
@@ -2426,26 +2563,80 @@ function getMonthlyBoardRows(m=state.currentMonth,y=state.currentYear){
     const ap=priority[a.col]??9;
     const bp=priority[b.col]??9;
     if(ap!==bp)return ap-bp;
-    // Dentro de cada tipo, primero lo que vence antes y luego alfabéticamente.
     const aKey=parseInt((a.dateLabel||'').match(/\d+/)?.[0]||'99');
     const bKey=parseInt((b.dateLabel||'').match(/\d+/)?.[0]||'99');
     return aKey-bKey || String(a.concept).localeCompare(String(b.concept),'es');
   });
 }
+function getFilteredMonthlyBoardRows(m=state.currentMonth,y=state.currentYear){
+  const all=getMonthlyBoardRows(m,y);
+  const statusKey=monthlyBoardFilter==='pending'?'pendiente':monthlyBoardFilter;
+  let rows=all.filter(r=>monthlyBoardFilter==='all'?true:r.status===statusKey);
+  const search=normalizeSearchText(monthlyBoardSearch);
+  if(search)rows=rows.filter(r=>[r.concept,r.type,r.account,r.qLabel,r.dateLabel].some(v=>normalizeSearchText(v).includes(search)));
+  return rows;
+}
+function setMonthlySetAsideById(id,col,value){
+  const item=(state[col]||[]).find(i=>i.id===id);if(!item)return;
+  setMonthlySetAsideState(item,value,state.currentMonth,state.currentYear);
+}
+function setMonthlyBoardApartState(row,value){
+  if(row.monthlyFund){setMonthlySetAsideById(row.id,row.col,value);return;}
+  if(row.col==='savings'){
+    const item=state.savings.find(s=>s.id===row.id);if(item)item.confirmed=!!value;
+    return;
+  }
+  if(row.col==='goalContrib'){
+    row.qList.forEach(q=>{
+      const target=q===1?'Q1':'Q2';
+      const existing=state.savings.find(s=>s.goalId===row.id&&s.month===state.currentMonth&&s.year===state.currentYear&&normalizeQuincena(s.quincena,s.date)===target);
+      if(value&&!existing){
+        const goal=(state.savingsGoals||[]).find(g=>g.id===row.id);const amount=goal?getGoalContributionAmount(goal,q):0;
+        if(amount>0)state.savings.push({id:uid(),date:q===1?(state.config.payDate1||1):(state.config.payDate2||16),quincena:target,amount,card:goal?.card||'',goalId:row.id,month:state.currentMonth,year:state.currentYear});
+      }else if(!value&&existing){state.savings=state.savings.filter(s=>s.id!==existing.id);}
+    });
+    return;
+  }
+  const item=(state[row.col]||[]).find(i=>i.id===row.id);if(!item)return;
+  row.qList.forEach(q=>{
+    if(row.col==='fixed'){const s=getFixedStatus(item);if(q===1)s.apartadoQ1=!!value;else s.apartadoQ2=!!value;}
+    else if(row.col==='installments'){const s=getInstallmentStatus(item);if(q===1)s.apartadoQ1=!!value;else s.apartadoQ2=!!value;}
+    else {if(q===1)item.apartadoQ1=!!value;else item.apartadoQ2=!!value;}
+  });
+}
+function setMonthlyBoardPaidState(row,value){
+  if(!row.canPay)return;
+  const item=(state[row.col]||[]).find(i=>i.id===row.id);if(!item)return;
+  const plan=getPaymentPlan(item);
+  const split=plan==='Pagar mitad en Q1 y mitad en Q2'||plan==='Dividir en varias quincenas de pago';
+  const payQs=[1,2].filter(q=>shouldShowPaidCheckbox({...row.item,__viewMonth:state.currentMonth,__viewYear:state.currentYear},q,state.currentMonth,state.currentYear));
+  if(split){
+    payQs.forEach(q=>{
+      if(row.col==='fixed'){const s=getFixedStatus(item);if(q===1)s.paidQ1=!!value;else s.paidQ2=!!value;s.paid=!!(s.paidQ1&&s.paidQ2);}
+      else if(row.col==='installments'){const s=getInstallmentStatus(item);if(q===1)s.paidQ1=!!value;else s.paidQ2=!!value;s.paid=!!(s.paidQ1&&s.paidQ2);}
+      else {if(q===1)item.paidQ1=!!value;else item.paidQ2=!!value;item.paid=!!(item.paidQ1&&item.paidQ2);}
+    });
+  }else{
+    if(row.col==='fixed')getFixedStatus(item).paid=!!value;
+    else if(row.col==='installments')getInstallmentStatus(item).paid=!!value;
+    else item.paid=!!value;
+  }
+}
+function apartAllMonthlyBoard(){
+  getFilteredMonthlyBoardRows().filter(r=>!r.apartComplete).forEach(r=>setMonthlyBoardApartState(r,true));
+  saveState();render();
+}
+function payAllMonthlyBoard(){
+  getFilteredMonthlyBoardRows().filter(r=>r.canPay&&!r.paidComplete).forEach(r=>setMonthlyBoardPaidState(r,true));
+  saveState();render();
+}
 function toggleMonthlyBoardApart(id,col){
-  const rows=getMonthlyBoardRows();
-  const row=rows.find(r=>r.id===id&&r.col===col);
-  if(!row)return;
-  row.qList.forEach(q=>{ if(isSetAside({...row.item,__viewMonth:state.currentMonth,__viewYear:state.currentYear},q)!==(!row.apartComplete)) toggleApartado(id,col,q); });
+  const row=getMonthlyBoardRows().find(r=>r.id===id&&r.col===col);if(!row)return;
+  setMonthlyBoardApartState(row,!row.apartComplete);saveState();render();
 }
 function toggleMonthlyBoardPaid(id,col){
-  const rows=getMonthlyBoardRows();
-  const row=rows.find(r=>r.id===id&&r.col===col);
-  if(!row)return;
-  row.qList.forEach(q=>{
-    if(!shouldShowPaidCheckbox({...row.item,__viewMonth:state.currentMonth,__viewYear:state.currentYear},q,state.currentMonth,state.currentYear))return;
-    if(isPaidForQuincena({...row.item,__viewMonth:state.currentMonth,__viewYear:state.currentYear},q)!==(!row.paidComplete)) togglePaid(id,col,q);
-  });
+  const row=getMonthlyBoardRows().find(r=>r.id===id&&r.col===col);if(!row)return;
+  setMonthlyBoardPaidState(row,!row.paidComplete);saveState();render();
 }
 
 
@@ -3556,7 +3747,7 @@ function getInstallmentFormMode(item){
   const apartPlan=getApartPlan(item||{});
   return {
     paymentMode: paymentPlan==='Dividir en varias quincenas de pago' ? 'biweekly' : 'monthly',
-    apartMode: (apartPlan==='Apartar todo en Q1'||apartPlan==='Apartar todo en Q2') ? 'monthly' : 'biweekly',
+    apartMode: apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly',
     apartQ: apartPlan==='Apartar todo en Q2' ? 2 : 1
   };
 }
@@ -3609,8 +3800,8 @@ function openInstallmentRecordModal(id=''){
   const apartQ1Raw=parseFloat(val('manualQ1',0))||0;
   const apartQ2Raw=parseFloat(val('manualQ2',0))||0;
   const suggestedHalf=monthlyAmount/2;
-  const apartQ1=apartQ1Raw>0?apartQ1Raw:suggestedHalf;
-  const apartQ2=apartQ2Raw>0?apartQ2Raw:suggestedHalf;
+  const apartQ1=apartQ1Raw>0?apartQ1Raw:(apartPlanValue==='Apartar todo en Q1'?monthlyAmount:apartPlanValue==='Apartar todo en Q2'?0:suggestedHalf);
+  const apartQ2=apartQ2Raw>0?apartQ2Raw:(apartPlanValue==='Apartar todo en Q2'?monthlyAmount:apartPlanValue==='Apartar todo en Q1'?0:suggestedHalf);
 
   const startMonth=parseInt(val('startMonth',val('month',state.currentMonth)));
   const startYear=parseInt(val('startYear',val('year',state.currentYear)))||state.currentYear;
@@ -3758,30 +3949,23 @@ function openInstallmentRecordModal(id=''){
           </div>
 
           <div class="flex gap-2 mb-4" data-apart-mode-buttons>
-            ${installmentModeButton('apartMode','monthly',mode.apartMode,'Mensual','calendar-check','azul')}
+            ${installmentModeButton('apartMode','monthly',mode.apartMode,'Fondo mensual','calendar-check','azul')}
             ${installmentModeButton('apartMode','biweekly',mode.apartMode,'Por quincenas','split','azul')}
           </div>
 
           <!-- Apartado mensual -->
           <div data-apart-monthly class="space-y-3 ${mode.apartMode==='monthly'?'':'hidden'}">
             <div class="rounded-xl bg-white border border-azul-100 p-3">
-              <div class="text-[11px] font-semibold text-gray-600 mb-2">¿En qué quincena apartas el monto completo?</div>
-              <div class="grid grid-cols-2 gap-2">
-                <label class="cursor-pointer">
-                  <input type="radio" name="apartMonthlyQ" value="1" ${mode.apartQ===1?'checked':''} onchange="updateInstallmentProgressiveForm(this.form)" class="sr-only">
-                  <div data-apart-q-button="1" class="rounded-lg border px-3 py-2 text-center text-xs font-bold ${mode.apartQ===1?'bg-azul-500 text-white border-azul-500':'bg-white text-gray-500 border-gray-200'}">Q1</div>
-                </label>
-                <label class="cursor-pointer">
-                  <input type="radio" name="apartMonthlyQ" value="2" ${mode.apartQ===2?'checked':''} onchange="updateInstallmentProgressiveForm(this.form)" class="sr-only">
-                  <div data-apart-q-button="2" class="rounded-lg border px-3 py-2 text-center text-xs font-bold ${mode.apartQ===2?'bg-azul-500 text-white border-azul-500':'bg-white text-gray-500 border-gray-200'}">Q2</div>
-                </label>
-              </div>
-              <div class="mt-3 flex items-center justify-between gap-3 text-xs">
-                <span class="text-gray-400">Monto que se apartará</span>
-                <b data-apart-monthly-amount class="text-azul-500">$0</b>
+              <div class="flex items-start gap-3">
+                <span class="w-9 h-9 rounded-xl bg-azul-50 border border-azul-100 text-azul-500 flex items-center justify-center shrink-0"><i data-lucide="wallet-cards" class="w-4 h-4"></i></span>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[11px] font-bold text-gray-700">Fondo mensual</div>
+                  <div class="text-[10px] text-gray-400 mt-0.5">Junta el dinero durante el mes sin cargarlo a Q1 ni Q2.</div>
+                </div>
+                <b data-apart-monthly-amount class="text-azul-500 text-sm">$0</b>
               </div>
             </div>
-            <p class="text-[10px] text-gray-400">Puedes cambiar Q1/Q2 al editar la deuda si un mes necesitas mover la carga.</p>
+            <p class="text-[10px] text-gray-400">Si prefieres decidir cuánto sale de cada quincena, cambia a “Por quincenas”.</p>
           </div>
 
           <!-- Apartado por quincenas -->
@@ -3892,7 +4076,6 @@ function updateInstallmentProgressiveForm(form){
 
   const paymentMode=form.querySelector('[name="paymentMode"]:checked')?.value||'monthly';
   const apartMode=form.querySelector('[name="apartMode"]:checked')?.value||'biweekly';
-  const apartQ=parseInt(form.querySelector('[name="apartMonthlyQ"]:checked')?.value)||1;
 
   form.querySelector('[data-payment-monthly]')?.classList.toggle('hidden',paymentMode!=='monthly');
   form.querySelector('[data-payment-biweekly]')?.classList.toggle('hidden',paymentMode!=='biweekly');
@@ -3921,21 +4104,13 @@ function updateInstallmentProgressiveForm(form){
   const apartPlan=form.querySelector('[name="apartPlan"]');
   if(apartPlan){
     if(apartMode==='monthly'){
-      apartPlan.value=apartQ===2?'Apartar todo en Q2':'Apartar todo en Q1';
+      apartPlan.value='Apartado mensual';
     }else{
       apartPlan.value=paymentMode==='biweekly'
         ? 'Dividir en varias quincenas de apartado'
         : 'Dividir apartado en Q1 y Q2';
     }
   }
-
-  // Botones Q1/Q2 del apartado mensual.
-  form.querySelectorAll('[data-apart-q-button]').forEach(el=>{
-    const active=parseInt(el.dataset.apartQButton)===apartQ;
-    el.className=`rounded-lg border px-3 py-2 text-center text-xs font-bold ${
-      active?'bg-azul-500 text-white border-azul-500':'bg-white text-gray-500 border-gray-200'
-    }`;
-  });
 
   const total=parseFloat(form.querySelector('[name="totalAmount"]')?.value)||0;
   const months=Math.max(1,parseInt(form.querySelector('[name="totalMonths"]')?.value)||1);
@@ -3975,7 +4150,7 @@ function updateInstallmentProgressiveForm(form){
 
     let apartText='';
     if(apartMode==='monthly'){
-      apartText=`apartado mensual completo en Q${apartQ}`;
+      apartText=`fondo mensual: ${fmt(effectiveAmount)} · sin asignar a Q1/Q2`;
     }else{
       const aq1Raw=parseFloat(form.querySelector('[name="manualQ1"]')?.value)||0;
       const aq2Raw=parseFloat(form.querySelector('[name="manualQ2"]')?.value)||0;
@@ -4021,7 +4196,7 @@ function getFixedProgressiveMode(item){
   const apartPlan=getApartPlan(item||{});
   return {
     paymentMode: paymentPlan==='Pagar mitad en Q1 y mitad en Q2' ? 'biweekly' : 'monthly',
-    apartMode: (apartPlan==='Apartar todo en Q1'||apartPlan==='Apartar todo en Q2') ? 'monthly' : 'biweekly',
+    apartMode: apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly',
     apartQ: apartPlan==='Apartar todo en Q2' ? 2 : 1
   };
 }
@@ -4054,8 +4229,9 @@ function openFixedRecordModal(id=''){
 
   const apartQ1Raw=parseFloat(val('manualQ1',0))||0;
   const apartQ2Raw=parseFloat(val('manualQ2',0))||0;
-  const apartQ1=apartQ1Raw>0?apartQ1Raw:amount/2;
-  const apartQ2=apartQ2Raw>0?apartQ2Raw:amount/2;
+  const fixedApartPlan=getApartPlan(item||{});
+  const apartQ1=apartQ1Raw>0?apartQ1Raw:(fixedApartPlan==='Apartar todo en Q1'?amount:fixedApartPlan==='Apartar todo en Q2'?0:amount/2);
+  const apartQ2=apartQ2Raw>0?apartQ2Raw:(fixedApartPlan==='Apartar todo en Q2'?amount:fixedApartPlan==='Apartar todo en Q1'?0:amount/2);
 
   const startMonth=parseInt(val('startMonth',val('month',state.currentMonth)));
   const startYear=parseInt(val('startYear',val('year',state.currentYear)))||state.currentYear;
@@ -4158,26 +4334,16 @@ function openFixedRecordModal(id=''){
           </div>
 
           <div class="flex gap-2 mb-4">
-            ${fixedChoiceButton('fixedApartMode','monthly',mode.apartMode,'Mensual','calendar-check','azul')}
+            ${fixedChoiceButton('fixedApartMode','monthly',mode.apartMode,'Fondo mensual','calendar-check','azul')}
             ${fixedChoiceButton('fixedApartMode','biweekly',mode.apartMode,'Por quincenas','split','azul')}
           </div>
 
           <div data-fixed-apart-monthly class="${mode.apartMode==='monthly'?'':'hidden'}">
             <div class="rounded-xl bg-white border border-azul-100 p-3">
-              <div class="text-[11px] font-semibold text-gray-600 mb-2">¿En qué quincena apartas el monto completo?</div>
-              <div class="grid grid-cols-2 gap-2">
-                <label class="cursor-pointer">
-                  <input type="radio" name="fixedApartMonthlyQ" value="1" ${mode.apartQ===1?'checked':''} onchange="updateFixedProgressiveForm(this.form)" class="sr-only">
-                  <div data-fixed-apart-q="1" class="rounded-lg border px-3 py-2 text-center text-xs font-bold">Q1</div>
-                </label>
-                <label class="cursor-pointer">
-                  <input type="radio" name="fixedApartMonthlyQ" value="2" ${mode.apartQ===2?'checked':''} onchange="updateFixedProgressiveForm(this.form)" class="sr-only">
-                  <div data-fixed-apart-q="2" class="rounded-lg border px-3 py-2 text-center text-xs font-bold">Q2</div>
-                </label>
-              </div>
-              <div class="mt-3 flex justify-between text-xs">
-                <span class="text-gray-400">Monto a apartar</span>
-                <b data-fixed-apart-monthly-amount class="text-azul-500">${fmt(amount)}</b>
+              <div class="flex items-start gap-3">
+                <span class="w-9 h-9 rounded-xl bg-azul-50 border border-azul-100 text-azul-500 flex items-center justify-center shrink-0"><i data-lucide="wallet-cards" class="w-4 h-4"></i></span>
+                <div class="min-w-0 flex-1"><div class="text-[11px] font-bold text-gray-700">Fondo mensual</div><div class="text-[10px] text-gray-400 mt-0.5">Aparta el total durante el mes sin cargarlo a una quincena específica.</div></div>
+                <b data-fixed-apart-monthly-amount class="text-azul-500 text-sm">${fmt(amount)}</b>
               </div>
             </div>
           </div>
@@ -4264,7 +4430,6 @@ function updateFixedProgressiveForm(form){
 
   const paymentMode=form.querySelector('[name="fixedPaymentMode"]:checked')?.value||'monthly';
   const apartMode=form.querySelector('[name="fixedApartMode"]:checked')?.value||'biweekly';
-  const apartQ=parseInt(form.querySelector('[name="fixedApartMonthlyQ"]:checked')?.value)||1;
   const amount=parseFloat(form.querySelector('[name="amount"]')?.value)||0;
   const date=Math.max(1,Math.min(31,parseInt(form.querySelector('[name="date"]')?.value)||1));
 
@@ -4285,15 +4450,8 @@ function updateFixedProgressiveForm(form){
 
   const apartPlan=form.querySelector('[name="apartPlan"]');
   if(apartPlan){
-    apartPlan.value=apartMode==='monthly'
-      ? (apartQ===2?'Apartar todo en Q2':'Apartar todo en Q1')
-      : 'Dividir apartado en Q1 y Q2';
+    apartPlan.value=apartMode==='monthly' ? 'Apartado mensual' : 'Dividir apartado en Q1 y Q2';
   }
-
-  form.querySelectorAll('[data-fixed-apart-q]').forEach(el=>{
-    const active=parseInt(el.dataset.fixedApartQ)===apartQ;
-    el.className=`rounded-lg border px-3 py-2 text-center text-xs font-bold ${active?'bg-azul-500 text-white border-azul-500':'bg-white text-gray-500 border-gray-200'}`;
-  });
 
   const hint=form.querySelector('[data-fixed-payment-q-hint]');
   if(hint)hint.textContent=`Este pago aparecerá en Q${date<=15?1:2}.`;
@@ -4328,7 +4486,7 @@ function updateFixedProgressiveForm(form){
 
     let apartText='';
     if(apartMode==='monthly'){
-      apartText=`apartado mensual completo en Q${apartQ}: ${fmt(amount)}`;
+      apartText=`fondo mensual: ${fmt(amount)} · sin asignar a Q1/Q2`;
     }else{
       const a1=parseFloat(form.querySelector('[name="manualQ1"]')?.value)||0;
       const a2=parseFloat(form.querySelector('[name="manualQ2"]')?.value)||0;
@@ -4358,7 +4516,7 @@ function getVariableProgressiveMode(item){
   const apartPlan=getApartPlan(item||{});
   return {
     paymentMode: paymentPlan==='Pagar mitad en Q1 y mitad en Q2' ? 'biweekly' : 'monthly',
-    apartMode: (apartPlan==='Apartar todo en Q1'||apartPlan==='Apartar todo en Q2') ? 'monthly' : 'biweekly',
+    apartMode: apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly',
     apartQ: apartPlan==='Apartar todo en Q2' ? 2 : 1
   };
 }
@@ -4393,8 +4551,9 @@ function openVariableRecordModal(id=''){
 
   const apartQ1Raw=parseFloat(val('manualQ1',0))||0;
   const apartQ2Raw=parseFloat(val('manualQ2',0))||0;
-  const apartQ1=apartQ1Raw>0?apartQ1Raw:amount/2;
-  const apartQ2=apartQ2Raw>0?apartQ2Raw:amount/2;
+  const variableApartPlan=getApartPlan(item||{});
+  const apartQ1=apartQ1Raw>0?apartQ1Raw:(variableApartPlan==='Apartar todo en Q1'?amount:variableApartPlan==='Apartar todo en Q2'?0:amount/2);
+  const apartQ2=apartQ2Raw>0?apartQ2Raw:(variableApartPlan==='Apartar todo en Q2'?amount:variableApartPlan==='Apartar todo en Q1'?0:amount/2);
 
   const month=parseInt(val('month',state.currentMonth));
   const year=parseInt(val('year',state.currentYear))||state.currentYear;
@@ -4519,30 +4678,17 @@ function openVariableRecordModal(id=''){
           </div>
 
           <div class="flex gap-2 mb-4">
-            ${variableChoiceButton('variableApartMode','monthly',mode.apartMode,'Mensual','calendar-check','azul')}
+            ${variableChoiceButton('variableApartMode','monthly',mode.apartMode,'Fondo mensual','calendar-check','azul')}
             ${variableChoiceButton('variableApartMode','biweekly',mode.apartMode,'Por quincenas','split','azul')}
           </div>
 
           <!-- Apartado mensual -->
           <div data-variable-apart-monthly class="${mode.apartMode==='monthly'?'':'hidden'}">
             <div class="rounded-xl bg-white border border-azul-100 p-3">
-              <div class="text-[11px] font-semibold text-gray-600 mb-2">¿En qué quincena apartas el monto completo?</div>
-
-              <div class="grid grid-cols-2 gap-2">
-                <label class="cursor-pointer">
-                  <input type="radio" name="variableApartMonthlyQ" value="1" ${mode.apartQ===1?'checked':''} onchange="updateVariableProgressiveForm(this.form)" class="sr-only">
-                  <div data-variable-apart-q="1" class="rounded-lg border px-3 py-2 text-center text-xs font-bold">Q1</div>
-                </label>
-
-                <label class="cursor-pointer">
-                  <input type="radio" name="variableApartMonthlyQ" value="2" ${mode.apartQ===2?'checked':''} onchange="updateVariableProgressiveForm(this.form)" class="sr-only">
-                  <div data-variable-apart-q="2" class="rounded-lg border px-3 py-2 text-center text-xs font-bold">Q2</div>
-                </label>
-              </div>
-
-              <div class="mt-3 flex justify-between text-xs">
-                <span class="text-gray-400">Monto a apartar</span>
-                <b data-variable-apart-monthly-amount class="text-azul-500">${fmt(amount)}</b>
+              <div class="flex items-start gap-3">
+                <span class="w-9 h-9 rounded-xl bg-azul-50 border border-azul-100 text-azul-500 flex items-center justify-center shrink-0"><i data-lucide="wallet-cards" class="w-4 h-4"></i></span>
+                <div class="min-w-0 flex-1"><div class="text-[11px] font-bold text-gray-700">Fondo mensual</div><div class="text-[10px] text-gray-400 mt-0.5">Junta el monto durante el mes sin asignarlo a Q1 o Q2.</div></div>
+                <b data-variable-apart-monthly-amount class="text-azul-500 text-sm">${fmt(amount)}</b>
               </div>
             </div>
           </div>
@@ -4616,7 +4762,6 @@ function updateVariableProgressiveForm(form){
 
   const paymentMode=form.querySelector('[name="variablePaymentMode"]:checked')?.value||'monthly';
   const apartMode=form.querySelector('[name="variableApartMode"]:checked')?.value||'biweekly';
-  const apartQ=parseInt(form.querySelector('[name="variableApartMonthlyQ"]:checked')?.value)||1;
   const amount=parseFloat(form.querySelector('[name="amount"]')?.value)||0;
   const estimated=parseFloat(form.querySelector('[name="estimatedAmount"]')?.value)||0;
   const date=Math.max(1,Math.min(31,parseInt(form.querySelector('[name="date"]')?.value)||1));
@@ -4635,15 +4780,8 @@ function updateVariableProgressiveForm(form){
 
   const apartPlan=form.querySelector('[name="apartPlan"]');
   if(apartPlan){
-    apartPlan.value=apartMode==='monthly'
-      ? (apartQ===2?'Apartar todo en Q2':'Apartar todo en Q1')
-      : 'Dividir apartado en Q1 y Q2';
+    apartPlan.value=apartMode==='monthly' ? 'Apartado mensual' : 'Dividir apartado en Q1 y Q2';
   }
-
-  form.querySelectorAll('[data-variable-apart-q]').forEach(el=>{
-    const active=parseInt(el.dataset.variableApartQ)===apartQ;
-    el.className=`rounded-lg border px-3 py-2 text-center text-xs font-bold ${active?'bg-azul-500 text-white border-azul-500':'bg-white text-gray-500 border-gray-200'}`;
-  });
 
   const hint=form.querySelector('[data-variable-payment-q-hint]');
   if(hint)hint.textContent=`Este pago aparecerá en Q${date<=15?1:2}.`;
@@ -4684,7 +4822,7 @@ function updateVariableProgressiveForm(form){
 
     let apartText='';
     if(apartMode==='monthly'){
-      apartText=`apartado completo en Q${apartQ}: ${fmt(amount)}`;
+      apartText=`fondo mensual: ${fmt(amount)} · sin asignar a Q1/Q2`;
     }else{
       const a1=parseFloat(form.querySelector('[name="manualQ1"]')?.value)||0;
       const a2=parseFloat(form.querySelector('[name="manualQ2"]')?.value)||0;
@@ -5210,9 +5348,12 @@ function updateYearEndExtra(k,v){
   render();
 }
 function exportBackup(){
+  state._profile={id:PROFILE_ID,label:PROFILE_LABEL};
   const payload={
     app:'Mi plan de pagos',
-    version:'1.0',
+    version:'1.1',
+    profileId:PROFILE_ID,
+    profileLabel:PROFILE_LABEL,
     exportedAt:new Date().toISOString(),
     data:state
   };
@@ -5221,7 +5362,7 @@ function exportBackup(){
   const a=document.createElement('a');
   const date=new Date().toISOString().slice(0,10);
   a.href=url;
-  a.download=`mi-plan-de-pagos-respaldo-${date}.json`;
+  a.download=`mi-plan-de-pagos-moni-respaldo-${date}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -5236,8 +5377,18 @@ function importBackup(event){
       const parsed=JSON.parse(reader.result);
       const imported=parsed.data||parsed;
       if(!imported||typeof imported!=='object'||!imported.config){alert('El archivo no parece ser un respaldo válido de Mi plan de pagos.');return;}
-      if(!confirm('¿Importar este respaldo? Esto reemplazará la información actual de la app en este navegador.'))return;
+      const backupProfile=String(parsed.profileId||imported?._profile?.id||imported?.profileId||'').toLowerCase();
+      if(backupProfile&&backupProfile!==PROFILE_ID){
+        alert(`Este respaldo pertenece a otro perfil (${parsed.profileLabel||imported?._profile?.label||backupProfile}) y no se puede importar en la app de Moni.`);
+        return;
+      }
+      if(!backupProfile){
+        const acceptLegacy=confirm('Este respaldo es de una versión antigua y no indica a qué perfil pertenece.\n\nImpórtalo solo si estás segura de que es el respaldo de Moni. ¿Continuar?');
+        if(!acceptLegacy)return;
+      }
+      if(!confirm('¿Importar este respaldo de Moni? Esto reemplazará la información actual de esta app en este navegador.'))return;
       state=imported;
+      state._profile={id:PROFILE_ID,label:PROFILE_LABEL};
       if(!state.config.yearEndExtras) state.config.yearEndExtras={bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
       if(!state.config.yearEndExtras.otherName) state.config.yearEndExtras.otherName='Otro extra';
       if(!state.savingsGoals||!Array.isArray(state.savingsGoals)) state.savingsGoals=[];
@@ -5246,8 +5397,11 @@ function importBackup(event){
       if(!Array.isArray(state.installments)) state.installments=[];
       if(!Array.isArray(state.variable)) state.variable=[];
       if(!Array.isArray(state.savings)) state.savings=[];
+      if(!Array.isArray(state.receivables)) state.receivables=[];
+      if(!Array.isArray(state.receivablePeople)) state.receivablePeople=[];
+      (state.receivables||[]).forEach(r=>{const n=String(r.person||'').trim();if(n&&!state.receivablePeople.some(p=>normalizeInstitutionText(p)===normalizeInstitutionText(n)))state.receivablePeople.push(n);});
       if(!Array.isArray(state.accounts)) state.accounts=[];
-if(!Array.isArray(state.customBanks)) state.customBanks=[];
+      if(!Array.isArray(state.customBanks)) state.customBanks=[];
       if(!state.categories||!Array.isArray(state.categories)) state.categories=[...DEFAULT_CATEGORIES];
       saveState();
       alert('Respaldo importado correctamente.');
