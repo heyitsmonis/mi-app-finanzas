@@ -144,16 +144,22 @@ function accountDisplayHtml(name,size='table'){
 }
 const PROFILE_ID='moni';
 const PROFILE_LABEL='Moni';
-const STORAGE_KEY='miplandepagos_moni_v1';
-const LEGACY_STORAGE_KEY='miplandepagos_estable_status_v4';
-const LEGACY_MIGRATION_FLAG='miplandepagos_moni_legacy_checked_v1';
+const APP_INSTANCE_ID='moni-final-2026-v2';
+// localStorage se comparte entre todas las páginas del mismo dominio. Para evitar cruces
+// entre la app de Moni y cualquier otra copia (por ejemplo la de Axel), la clave incluye
+// tanto el perfil como la ruta exacta donde está publicada esta app.
+const APP_ROUTE_NAMESPACE=String(globalThis.location?.pathname||'local')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g,'_')
+  .replace(/^_+|_+$/g,'') || 'local';
+const STORAGE_KEY=`miplandepagos_${PROFILE_ID}_${APP_INSTANCE_ID}_${APP_ROUTE_NAMESPACE}`;
 let state={
-  currentMonth:5,currentYear:2026,
-  config:{salaryMonthly:20000,salaryBiweekly:10000,payDate1:1,payDate2:16,savingsGoal:5000,currency:'MXN',yearEndExtras:{bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''}},
-  fixed:[{id:'f1',concept:'Internet',category:'servicios',date:7,amount:1200,card:'BBVA',splitMode:'Dividir en dos quincenas',startMonth:5,startYear:2026,hasEndDate:false,month:5,year:2026,monthlyStatus:{}},{id:'f2',concept:'Renta',category:'vivienda',date:3,amount:7500,card:'BBVA',splitMode:'Cargar completo en Q1',startMonth:5,startYear:2026,hasEndDate:false,month:5,year:2026,monthlyStatus:{}}],
-  installments:[{id:'i1',concept:'Laptop',totalAmount:18000,totalMonths:6,startMonth:4,startYear:2026,amount:3000,quincenaAmount:1500,purchaseCard:'Nu',card:'BBVA',status:'pendiente',notes:'Equipo de trabajo',splitMode:'Dividir en dos quincenas',month:4,year:2026,monthlyStatus:{}}],
-  variable:[{id:'v1',concept:'Super',category:'comida',date:20,estimatedAmount:2200,amount:2000,card:'BBVA',paid:false,splitMode:'Cargar completo en Q2',apartadoQ1:false,apartadoQ2:true,month:5,year:2026}],
-  savings:[{id:'s1',date:15,quincena:'Q1',amount:2500,card:'Nu',month:5,year:2026},{id:'s2',date:30,quincena:'Q2',amount:2500,card:'Nu',month:5,year:2026}],
+  currentMonth:new Date().getMonth(),currentYear:new Date().getFullYear(),
+  config:{salaryMonthly:0,salaryBiweekly:0,payDate1:1,payDate2:16,savingsGoal:0,currency:'MXN',yearEndExtras:{bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''}},
+  fixed:[],
+  installments:[],
+  variable:[],
+  savings:[],
   savingsGoals:[],
   receivables:[],
   receivablePeople:[],
@@ -170,37 +176,17 @@ let variableViewFilter='all',variableCategoryFilter='all',variableViewSearch='',
 let calendarFilter='all';
 let selectedCalendarDay=null;
 let pendingCustomBankImage='';
-// Carga únicamente el espacio privado de Moni. El storage viejo se conserva intacto para no mezclar perfiles.
+// Carga EXCLUSIVAMENTE el espacio de esta instalación de Moni.
+// No se lee ni se migra ninguna clave anterior: una copia contaminada del navegador
+// queda ignorada automáticamente y nunca puede volver a entrar por accidente.
 try{
   const saved=localStorage.getItem(STORAGE_KEY);
   if(saved){
     const parsed=JSON.parse(saved);
-    if(parsed&&typeof parsed==='object') state=parsed;
-  }else{
-    // Migración segura de versiones antiguas: nunca copia automáticamente datos sin perfil.
-    const legacyRaw=localStorage.getItem(LEGACY_STORAGE_KEY);
-    const alreadyChecked=localStorage.getItem(LEGACY_MIGRATION_FLAG)==='1';
-    if(legacyRaw&&!alreadyChecked){
-      let legacy=null;
-      try{legacy=JSON.parse(legacyRaw);}catch(_e){}
-      const legacyProfile=String(legacy?._profile?.id||legacy?.profileId||'').toLowerCase();
-      if(legacyProfile===PROFILE_ID){
-        state=legacy;
-        state._profile={id:PROFILE_ID,label:PROFILE_LABEL};
-        localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-        localStorage.setItem(LEGACY_MIGRATION_FLAG,'1');
-      }else if(legacyProfile&&legacyProfile!==PROFILE_ID){
-        // Es de otro perfil (por ejemplo Axel): se ignora y no se toca.
-        localStorage.setItem(LEGACY_MIGRATION_FLAG,'1');
-      }else{
-        const keepLegacy=confirm('Encontré datos de una versión anterior sin perfil. ¿Son los datos de Moni y quieres copiarlos a esta app?\n\nAceptar = conservarlos como Moni.\nCancelar = no copiarlos (no se borran).');
-        if(keepLegacy&&legacy&&typeof legacy==='object'){
-          state=legacy;
-          state._profile={id:PROFILE_ID,label:PROFILE_LABEL};
-          localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-        }
-        localStorage.setItem(LEGACY_MIGRATION_FLAG,'1');
-      }
+    const storedProfile=String(parsed?._profile?.id||'').toLowerCase();
+    const storedInstance=String(parsed?._instance?.id||'');
+    if(parsed&&typeof parsed==='object'&&storedProfile===PROFILE_ID&&storedInstance===APP_INSTANCE_ID){
+      state=parsed;
     }
   }
 }catch(e){}
@@ -225,7 +211,7 @@ if(!Array.isArray(state.receivablePeople)) state.receivablePeople=[];
 if(!Array.isArray(state.accounts)) state.accounts=[];
 if(!Array.isArray(state.customBanks)) state.customBanks=[];
 if(!Array.isArray(state.categories)) state.categories=[...DEFAULT_CATEGORIES];
-function saveState(){state._profile={id:PROFILE_ID,label:PROFILE_LABEL};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+function saveState(){state._profile={id:PROFILE_ID,label:PROFILE_LABEL};state._instance={id:APP_INSTANCE_ID,route:APP_ROUTE_NAMESPACE};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 function fmt(n){
   const value=Number(n)||0;
   const hasDecimals=Math.abs(value%1)>0.000001;
@@ -5354,6 +5340,7 @@ function exportBackup(){
     version:'1.1',
     profileId:PROFILE_ID,
     profileLabel:PROFILE_LABEL,
+    instanceId:APP_INSTANCE_ID,
     exportedAt:new Date().toISOString(),
     data:state
   };
@@ -5389,6 +5376,7 @@ function importBackup(event){
       if(!confirm('¿Importar este respaldo de Moni? Esto reemplazará la información actual de esta app en este navegador.'))return;
       state=imported;
       state._profile={id:PROFILE_ID,label:PROFILE_LABEL};
+      state._instance={id:APP_INSTANCE_ID,route:APP_ROUTE_NAMESPACE};
       if(!state.config.yearEndExtras) state.config.yearEndExtras={bonusEstimated:0,bonusReal:0,savingsFundEstimated:0,savingsFundReal:0,otherName:'Otro extra',otherEstimated:0,otherReal:0,notes:''};
       if(!state.config.yearEndExtras.otherName) state.config.yearEndExtras.otherName='Otro extra';
       if(!state.savingsGoals||!Array.isArray(state.savingsGoals)) state.savingsGoals=[];
