@@ -363,27 +363,92 @@ function isFixedActiveInMonth(item,m,y){const sm=item.startMonth??item.month??0,
 function getFixedStatus(item,m=state.currentMonth,y=state.currentYear){if(!item.monthlyStatus)item.monthlyStatus={};const k=monthKey(m,y);if(!item.monthlyStatus[k])item.monthlyStatus[k]={apartadoQ1:false,apartadoQ2:false,apartadoMes:false,paid:false};if(item.monthlyStatus[k].apartadoMes===undefined)item.monthlyStatus[k].apartadoMes=false;return item.monthlyStatus[k];}
 function getFixedPeriodText(item){const sm=item.startMonth??item.month??0,sy=item.startYear??item.year??state.currentYear;if(!item.hasEndDate)return `${MONTHS[sm]} ${sy} · sin fecha límite`;return `${MONTHS[sm]} ${sy} - ${MONTHS[item.endMonth??sm]} ${item.endYear??sy}`;}
 
-function getInstallmentPaymentTargets(item){
-  if(getPaymentPlan(item)!=='Dividir en varias quincenas de pago')return [];
-  const generated=getSequentialQuincenaTargets(item,'payment');
-  const saved=Array.isArray(item.paymentSchedule)?item.paymentSchedule:[];
-  const defaultAmount=parseFloat(item.quincenaAmount)||((parseFloat(item.amount)||0)/2)||0;
-  return generated.map((t,i)=>{
-    const existing=saved.find(s=>parseInt(s.index)===i+1)||saved[i]||{};
-    const baseDay=t.q===1?(parseInt(item.paymentDayQ1)||parseInt(item.date)||1):(parseInt(item.paymentDayQ2)||parseInt(item.date)||16);
-    const safeDay=Math.max(1,Math.min(baseDay,getDaysInMonth(t.month,t.year)));
-    return {
-      index:i+1,
-      month:t.month,
-      year:t.year,
-      q:t.q,
-      date:existing.date||isoDate(t.year,t.month,safeDay),
-      amount:parseFloat(existing.amount)||defaultAmount
-    };
+function getInstallmentPaymentChanges(item){
+  return (Array.isArray(item?.paymentQuincenaChanges)?item.paymentQuincenaChanges:[])
+    .map((c,i)=>({
+      id:c.id||`legacy-${i}`,
+      month:Math.max(0,Math.min(11,parseInt(c.month)||0)),
+      year:parseInt(c.year)||state.currentYear,
+      q:parseInt(c.q)===2?2:1,
+      day:Math.max(1,Math.min(31,parseInt(c.day)||((parseInt(c.q)===2)?16:1))),
+      createdAt:c.createdAt||''
+    }))
+    .sort((a,b)=>(monthIndex(a.month,a.year)*2+(a.q-1))-(monthIndex(b.month,b.year)*2+(b.q-1)));
+}
+function hasInstallmentPaymentChanges(item){return getInstallmentPaymentChanges(item).length>0;}
+function getInstallmentMonthlyPaymentTargets(item){
+  const plan=getPaymentPlan(item);
+  if(!['Pagar todo en Q1','Pagar todo en Q2'].includes(plan))return [];
+  const total=Math.max(1,parseInt(item.totalMonths)||1);
+  const sm=item.startMonth??item.month??state.currentMonth, sy=item.startYear??item.year??state.currentYear;
+  const baseQ=plan==='Pagar todo en Q2'?2:1;
+  const amount=parseFloat(item.amount)||0;
+  const baseDay=Math.max(1,Math.min(31,parseInt(item.date)||(baseQ===1?1:16)));
+  let targets=Array.from({length:total},(_,i)=>{
+    const d=addMonthOffset(sm,sy,i);
+    const safeDay=Math.max(1,Math.min(baseDay,getDaysInMonth(d.month,d.year)));
+    return {month:d.month,year:d.year,q:baseQ,day:safeDay,date:isoDate(d.year,d.month,safeDay),amount};
   });
+  getInstallmentPaymentChanges(item).forEach(change=>{
+    const effectiveAbs=monthIndex(change.month,change.year)*2+(change.q-1);
+    const replaceAt=targets.findIndex(t=>(monthIndex(t.month,t.year)*2+(t.q-1))>=effectiveAbs);
+    if(replaceAt<0)return;
+    const remaining=total-replaceAt;
+    const keep=targets.slice(0,replaceAt);
+    const regenerated=Array.from({length:remaining},(_,i)=>{
+      const d=addMonthOffset(change.month,change.year,i);
+      const safeDay=Math.max(1,Math.min(change.day,getDaysInMonth(d.month,d.year)));
+      return {month:d.month,year:d.year,q:change.q,day:safeDay,date:isoDate(d.year,d.month,safeDay),amount};
+    });
+    targets=[...keep,...regenerated];
+  });
+  return targets.map((t,i)=>({...t,index:i+1}));
+}
+function getInstallmentPaymentTargets(item){
+  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
+    const generated=getSequentialQuincenaTargets(item,'payment');
+    const saved=Array.isArray(item.paymentSchedule)?item.paymentSchedule:[];
+    const defaultAmount=parseFloat(item.quincenaAmount)||((parseFloat(item.amount)||0)/2)||0;
+    return generated.map((t,i)=>{
+      const existing=saved.find(s=>parseInt(s.index)===i+1)||saved[i]||{};
+      const baseDay=t.q===1?(parseInt(item.paymentDayQ1)||parseInt(item.date)||1):(parseInt(item.paymentDayQ2)||parseInt(item.date)||16);
+      const safeDay=Math.max(1,Math.min(baseDay,getDaysInMonth(t.month,t.year)));
+      return {
+        index:i+1,
+        month:t.month,
+        year:t.year,
+        q:t.q,
+        date:existing.date||isoDate(t.year,t.month,safeDay),
+        amount:parseFloat(existing.amount)||defaultAmount
+      };
+    });
+  }
+  return hasInstallmentPaymentChanges(item)?getInstallmentMonthlyPaymentTargets(item):[];
 }
 function getInstallmentPaymentTarget(item,q,m=item.__viewMonth??state.currentMonth,y=item.__viewYear??state.currentYear){
   return getInstallmentPaymentTargets(item).find(t=>t.q===q&&t.month===m&&t.year===y)||null;
+}
+function getInstallmentScheduledQsForMonth(item,m=state.currentMonth,y=state.currentYear){
+  return getInstallmentPaymentTargets(item).filter(t=>t.month===m&&t.year===y).sort((a,b)=>a.q-b.q).map(t=>t.q);
+}
+function isInstallmentScheduledTargetPaid(item,q,m=state.currentMonth,y=state.currentYear){
+  const s=getInstallmentStatus(item,m,y);
+  const qs=getInstallmentScheduledQsForMonth(item,m,y);
+  const explicit=q===1?!!s.paidQ1:!!s.paidQ2;
+  if(explicit)return true;
+  if(!qs.includes(q))return false;
+  if(qs.length<=1)return !!s.paid;
+  return q===qs[0]&&!!s.paid;
+}
+function setInstallmentScheduledTargetPaid(item,q,value,m=state.currentMonth,y=state.currentYear){
+  const s=getInstallmentStatus(item,m,y);
+  const qs=getInstallmentScheduledQsForMonth(item,m,y);
+  if(q===1)s.paidQ1=!!value;else s.paidQ2=!!value;
+  if(qs.length<=1){
+    s.paid=!!value;
+  }else if(q===qs[0]){
+    s.paid=!!value;
+  }
 }
 function getInstallmentQuotaLabel(item,q,m=item.__viewMonth??state.currentMonth,y=item.__viewYear??state.currentYear){
   const t=getInstallmentPaymentTarget(item,q,m,y);
@@ -430,10 +495,11 @@ function isInstallmentTargetCancelledByLiquidation(item,q,m=item.__viewMonth??st
 function getInstallmentPaidAmount(item){
   const total=parseFloat(item.totalAmount)||0;
   if(isInstallmentLiquidated(item))return total;
-  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
+  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'||hasInstallmentPaymentChanges(item)){
     return Math.min(total,getInstallmentPaymentTargets(item).reduce((sum,t)=>{
-      const s=getInstallmentStatus(item,t.month,t.year);
-      const paid=t.q===1?!!s.paidQ1:!!s.paidQ2;
+      const paid=getPaymentPlan(item)==='Dividir en varias quincenas de pago'
+        ? (()=>{const s=getInstallmentStatus(item,t.month,t.year);return t.q===1?!!s.paidQ1:!!s.paidQ2;})()
+        : isInstallmentScheduledTargetPaid(item,t.q,t.month,t.year);
       return sum+(paid?(parseFloat(t.amount)||0):0);
     },0));
   }
@@ -477,11 +543,12 @@ function getInstallmentTrackerMonths(item){
   });
 }
 function renderInstallmentMonthTracker(item){
-  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
+  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'||hasInstallmentPaymentChanges(item)){
     const targets=getInstallmentPaymentTargets(item);
+    const shifted=hasInstallmentPaymentChanges(item)&&getPaymentPlan(item)!=='Dividir en varias quincenas de pago';
     const chips=targets.map(t=>{
       const s=getInstallmentStatus(item,t.month,t.year);
-      const paid=t.q===1?!!s.paidQ1:!!s.paidQ2;
+      const paid=shifted?isInstallmentScheduledTargetPaid(item,t.q,t.month,t.year):(t.q===1?!!s.paidQ1:!!s.paidQ2);
       const isLiq=isLiquidationTarget(item,t.q,t.month,t.year);
       const cancelled=isInstallmentTargetCancelledByLiquidation(item,t.q,t.month,t.year);
       const cls=isLiq?'bg-menta-100 border-menta-300 text-menta-700':cancelled?'bg-gray-50 border-gray-100 text-gray-300':paid?'bg-menta-50 border-menta-200 text-menta-600':'bg-lila-50 border-lila-100 text-lila-600';
@@ -489,8 +556,11 @@ function renderInstallmentMonthTracker(item){
       const title=isLiq?`Liquidada ${formatShortDate(item.liquidation.date)}`:cancelled?'Cancelada por liquidación':`${formatShortDate(t.date)} · Q${t.q} · ${fmt(t.amount)}`;
       return `<div title="${title}" class="min-w-[58px] h-12 rounded-lg border ${cls} flex flex-col items-center justify-center leading-none px-1.5"><span class="text-[11px] font-bold">${icon}</span><span class="text-[8px] mt-1">${isLiq?'Liquidada':cancelled?'Cancelada':`${t.index}/${targets.length} · Q${t.q}`}</span></div>`;
     }).join('');
-    const paidCount=targets.filter(t=>{const s=getInstallmentStatus(item,t.month,t.year);return (t.q===1?s.paidQ1:s.paidQ2)||isLiquidationTarget(item,t.q,t.month,t.year);}).length;
-    return `<div class="mb-2.5 bg-gray-50/70 border border-gray-100 rounded-xl p-2.5"><div class="flex items-center justify-between mb-2"><span class="text-[11px] font-semibold text-gray-500 flex items-center gap-1.5"><i data-lucide="list-checks" class="w-3.5 h-3.5 text-menta-500"></i>Cuotas quincenales</span><span class="text-[10px] text-gray-400 font-semibold">${isInstallmentLiquidated(item)?'Liquidada':`${paidCount}/${targets.length} pagadas`}</span></div><div class="flex flex-wrap gap-1.5">${chips}</div></div>`;
+    const paidCount=targets.filter(t=>{
+      const paid=shifted?isInstallmentScheduledTargetPaid(item,t.q,t.month,t.year):(()=>{const s=getInstallmentStatus(item,t.month,t.year);return t.q===1?!!s.paidQ1:!!s.paidQ2;})();
+      return paid||isLiquidationTarget(item,t.q,t.month,t.year);
+    }).length;
+    return `<div class="mb-2.5 bg-gray-50/70 border border-gray-100 rounded-xl p-2.5"><div class="flex items-center justify-between mb-2"><span class="text-[11px] font-semibold text-gray-500 flex items-center gap-1.5"><i data-lucide="list-checks" class="w-3.5 h-3.5 text-menta-500"></i>${shifted?'Calendario con cambio de quincena':'Cuotas quincenales'}</span><span class="text-[10px] text-gray-400 font-semibold">${isInstallmentLiquidated(item)?'Liquidada':`${paidCount}/${targets.length} pagadas`}</span></div><div class="flex flex-wrap gap-1.5">${chips}</div></div>`;
   }
   const months=getInstallmentTrackerMonths(item);
   const paidCount=months.filter(m=>m.paid).length;
@@ -534,7 +604,7 @@ function renderOffsetCoverage(item){
   </div>`;
 }
 function getInstallmentPeriodText(item){
-  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
+  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'||hasInstallmentPaymentChanges(item)){
     const targets=getInstallmentPaymentTargets(item);
     if(targets.length){
       const first=targets[0],last=targets[targets.length-1];
@@ -546,7 +616,7 @@ function getInstallmentPeriodText(item){
 }
 function isInstallmentRelevantInMonth(item,m,y){
   const temp={...item,__collection:'installments',__viewMonth:m,__viewYear:y};
-  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
+  if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'||hasInstallmentPaymentChanges(item)){
     return getPaymentPlanAmountForQ(temp,1)>0||getPaymentPlanAmountForQ(temp,2)>0||getAmountToSetAside(temp,1)>0||getAmountToSetAside(temp,2)>0;
   }
   if(isInstallmentLiquidated(item)){
@@ -688,6 +758,11 @@ function getAmountToSetAside(item,q){
       return liq+(wasPaid?regular:0);
     }
     if(isInstallmentTargetCancelledByLiquidation(item,q,viewMonth,viewYear))return 0;
+    if(hasInstallmentPaymentChanges(item)&&['Apartar todo en Q1','Apartar todo en Q2'].includes(plan)){
+      const target=getInstallmentPaymentTarget(item,q,viewMonth,viewYear);
+      if(target)return parseFloat(target.amount)||amount;
+      return 0;
+    }
   }
   if(plan==='Apartar todo en Q1')return q===1?getManualAmountForQ(item,1,amount):0;
   if(plan==='Apartar todo en Q2')return q===2?getManualAmountForQ(item,2,amount):0;
@@ -791,7 +866,7 @@ function duplicateItem(id,col){
   if(copy.concept)copy.concept=`${copy.concept} copia`;
   copy.month=state.currentMonth;copy.year=state.currentYear;
   if(col==='fixed'){copy.startMonth=state.currentMonth;copy.startYear=state.currentYear;copy.monthlyStatus={};}
-  if(col==='installments'){copy.startMonth=state.currentMonth;copy.startYear=state.currentYear;copy.monthlyStatus={};}
+  if(col==='installments'){copy.startMonth=state.currentMonth;copy.startYear=state.currentYear;copy.monthlyStatus={};copy.paymentQuincenaChanges=[];copy.paymentSchedule=[];}
   if(col==='variable'){copy.paid=false;copy.apartadoQ1=false;copy.apartadoQ2=false;}
   if(col==='savings'){copy.date=parseInt(copy.date)||1;copy.quincena=normalizeQuincena(copy.quincena,copy.date);}
   arr.push(copy);saveState();render();
@@ -814,6 +889,11 @@ function getPaymentPlanAmountForQ(item,q){
       return liq+(wasPaid?regular:0);
     }
     if(isInstallmentTargetCancelledByLiquidation(item,q,vm,vy))return 0;
+    if(hasInstallmentPaymentChanges(item)&&['Pagar todo en Q1','Pagar todo en Q2'].includes(getPaymentPlan(item))){
+      const shiftedTarget=getInstallmentPaymentTarget(item,q,vm,vy);
+      if(shiftedTarget)return parseFloat(shiftedTarget.amount)||getPaymentAmount(item);
+      return 0;
+    }
     if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
       const target=getInstallmentPaymentTarget(item,q,vm,vy);
       return target?(parseFloat(target.amount)||0):0;
@@ -851,6 +931,7 @@ function shouldShowPaidCheckbox(item,q,m=state.currentMonth,y=state.currentYear)
   const col=getPaymentCollection(item);
   if(col==='goalContrib'||col==='savings')return false;
   if(col==='installments'&&getPaymentPlanAmountForQ({...item,__viewMonth:m,__viewYear:y},q)<=0)return false;
+  if(col==='installments'&&hasInstallmentPaymentChanges(item))return getPaymentPlanAmountForQ({...item,__viewMonth:m,__viewYear:y},q)>0;
   const plan=getPaymentPlan(item);
   if(plan==='Pagar mitad en Q1 y mitad en Q2'||plan==='Dividir en varias quincenas de pago')return getPaymentPlanAmountForQ(item,q)>0;
   return getPaidCheckboxQuincena(item,m,y)===q;
@@ -858,6 +939,7 @@ function shouldShowPaidCheckbox(item,q,m=state.currentMonth,y=state.currentYear)
 function isPaidForQuincena(item,q){
   const vm=item.__viewMonth??state.currentMonth, vy=item.__viewYear??state.currentYear;
   if(getPaymentCollection(item)==='installments'&&isLiquidationTarget(item,q,vm,vy))return true;
+  if(getPaymentCollection(item)==='installments'&&hasInstallmentPaymentChanges(item))return isInstallmentScheduledTargetPaid(item,q,vm,vy);
   const plan=getPaymentPlan(item);
   if(plan==='Pagar mitad en Q1 y mitad en Q2'||plan==='Dividir en varias quincenas de pago')return q===1?!!item.paidQ1:!!item.paidQ2;
   return !!item.paid;
@@ -1918,6 +2000,11 @@ function togglePaid(id,col,q=null){
   const item=state[col].find(i=>i.id===id);
   if(!item)return;
   const plan=getPaymentPlan(item);
+  if(col==='installments'&&q&&hasInstallmentPaymentChanges(item)){
+    const current=isInstallmentScheduledTargetPaid(item,q,state.currentMonth,state.currentYear);
+    setInstallmentScheduledTargetPaid(item,q,!current,state.currentMonth,state.currentYear);
+    saveState();render();return;
+  }
   const isSplitPaid=plan==='Pagar mitad en Q1 y mitad en Q2'||plan==='Dividir en varias quincenas de pago';
   if(isSplitPaid&&q){
     if(col==='fixed'){
@@ -3731,9 +3818,10 @@ function editItem(id,col){if(col==='savings')return openSavingModal(id);const ty
 function getInstallmentFormMode(item){
   const paymentPlan=getPaymentPlan(item||{});
   const apartPlan=getApartPlan(item||{});
+  const savedApartMode=['monthly','biweekly'].includes(item?.apartUiMode)?item.apartUiMode:'';
   return {
     paymentMode: paymentPlan==='Dividir en varias quincenas de pago' ? 'biweekly' : 'monthly',
-    apartMode: apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly',
+    apartMode: savedApartMode||(apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly'),
     apartQ: apartPlan==='Apartar todo en Q2' ? 2 : 1
   };
 }
@@ -3771,6 +3859,7 @@ function openInstallmentRecordModal(id=''){
   const selected=(a,b)=>String(a)===String(b)?'selected':'';
   const paymentPlanValue=getPaymentPlan(item||{});
   const apartPlanValue=getApartPlan(item||{});
+  const apartStrategy=getQuincenaStrategyFromPlan(apartPlanValue,'apart');
   const mode=getInstallmentFormMode(item||{});
 
   const totalMonths=Math.max(1,parseInt(val('totalMonths',1))||1);
@@ -3791,6 +3880,10 @@ function openInstallmentRecordModal(id=''){
 
   const startMonth=parseInt(val('startMonth',val('month',state.currentMonth)));
   const startYear=parseInt(val('startYear',val('year',state.currentYear)))||state.currentYear;
+  const paymentChanges=getInstallmentPaymentChanges(item||{});
+  const suggestedShiftQ=paymentMonthlyQ===1?2:1;
+  const suggestedShiftDay=suggestedShiftQ===2?Math.max(16,date):Math.min(15,date);
+  const changesHtml=paymentChanges.length?paymentChanges.map(c=>`<div class="flex items-center justify-between gap-2 rounded-lg bg-white border border-menta-100 px-3 py-2"><div class="text-[10px] text-gray-600"><b class="text-menta-600">Desde Q${c.q} · ${MONTHS[c.month]} ${c.year}</b><span class="text-gray-400"> · día ${c.day}</span></div><button type="button" onclick="removeInstallmentPaymentChange('${item?.id||''}','${c.id}')" class="text-[9px] font-semibold text-red-400 hover:text-red-500">Quitar</button></div>`).join(''):'';
 
   const modal=document.getElementById('modalContent');
   modal.className='bg-white rounded-2xl w-full max-w-5xl max-h-[92%] overflow-y-auto card-shadow';
@@ -3878,6 +3971,21 @@ function openInstallmentRecordModal(id=''){
               <input type="number" min="1" max="31" name="date" value="${date}" oninput="updateInstallmentProgressiveForm(this.form)" class="w-full border rounded-lg px-3 py-2 text-sm bg-white">
               <p class="text-[10px] text-gray-400 mt-1">La app lo ubicará automáticamente en Q1 o Q2 según el día.</p>
             </div>
+
+            ${item?`<div class="rounded-xl border border-menta-100 bg-white/80 p-3">
+              <div class="flex items-start gap-2"><span class="w-8 h-8 rounded-lg bg-menta-50 text-menta-600 flex items-center justify-center shrink-0"><i data-lucide="arrow-right-left" class="w-4 h-4"></i></span><div><div class="text-[11px] font-bold text-gray-700">Cambiar de quincena sin tocar el historial</div><div class="text-[10px] text-gray-400 mt-0.5">Úsalo si este pago antes iba en Q1 y desde cierto momento debe pasar a Q2, o al revés.</div></div></div>
+              ${changesHtml?`<div class="mt-3 space-y-1.5"><div class="text-[9px] uppercase tracking-wide font-bold text-gray-400">Cambios guardados</div>${changesHtml}</div>`:''}
+              <label class="mt-3 flex items-center gap-2 text-[10.5px] font-semibold text-gray-600 cursor-pointer"><input type="checkbox" name="addPaymentQuincenaChange" value="yes" onchange="toggleInstallmentPaymentChangeFields(this.form)" class="w-4 h-4 accent-menta-500">Registrar un nuevo cambio</label>
+              <div data-payment-quincena-change class="hidden mt-3 rounded-xl bg-menta-50/55 border border-menta-100 p-3">
+                <div class="grid grid-cols-4 gap-2">
+                  <div><label class="block text-[9px] text-gray-400 mb-1">Nueva quincena</label><select name="paymentShiftQ" onchange="syncInstallmentShiftDay(this.form)" class="w-full border rounded-lg px-2 py-2 text-xs bg-white"><option value="1" ${suggestedShiftQ===1?'selected':''}>Q1</option><option value="2" ${suggestedShiftQ===2?'selected':''}>Q2</option></select></div>
+                  <div><label class="block text-[9px] text-gray-400 mb-1">Desde el mes</label><select name="paymentShiftMonth" class="w-full border rounded-lg px-2 py-2 text-xs bg-white">${MONTHS.map((m,i)=>`<option value="${i}" ${i===state.currentMonth?'selected':''}>${m}</option>`).join('')}</select></div>
+                  <div><label class="block text-[9px] text-gray-400 mb-1">Año</label><input type="number" name="paymentShiftYear" value="${state.currentYear}" class="w-full border rounded-lg px-2 py-2 text-xs bg-white"></div>
+                  <div><label class="block text-[9px] text-gray-400 mb-1">Día de pago</label><input type="number" min="1" max="31" name="paymentShiftDay" value="${suggestedShiftDay}" class="w-full border rounded-lg px-2 py-2 text-xs bg-white"></div>
+                </div>
+                <div class="mt-2 flex items-start gap-1.5 text-[9.5px] text-menta-700"><i data-lucide="shield-check" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i><span><b>Lo anterior no cambia.</b> Si ya pagaste la quincena anterior de ese mismo mes, el nuevo pago contará como la siguiente cuota y después continuará en la nueva quincena.</span></div>
+              </div>
+            </div>`:''}
           </div>
 
           <!-- Pago quincenal -->
@@ -3956,6 +4064,10 @@ function openInstallmentRecordModal(id=''){
 
           <!-- Apartado por quincenas -->
           <div data-apart-biweekly class="space-y-3 ${mode.apartMode==='biweekly'?'':'hidden'}">
+            <div>
+              <div class="text-[10px] font-semibold text-gray-500 mb-2">¿Cómo quieres hacer el apartado?</div>
+              ${quincenaStrategyButtons('installmentApartStrategy',apartStrategy,'azul')}
+            </div>
             <div class="rounded-xl bg-white border border-azul-100 p-3">
               <div class="text-[11px] font-semibold text-gray-600 mb-2">Distribución por quincena</div>
               <div class="grid grid-cols-2 gap-3">
@@ -4041,6 +4153,30 @@ function openInstallmentRecordModal(id=''){
   updateInstallmentProgressiveForm(modal.querySelector('form'));
 }
 
+function toggleInstallmentPaymentChangeFields(form){
+  if(!form)return;
+  const enabled=!!form.querySelector('[name="addPaymentQuincenaChange"]')?.checked;
+  form.querySelector('[data-payment-quincena-change]')?.classList.toggle('hidden',!enabled);
+  if(enabled)syncInstallmentShiftDay(form);
+  lucide.createIcons();
+}
+function syncInstallmentShiftDay(form){
+  if(!form)return;
+  const q=parseInt(form.querySelector('[name="paymentShiftQ"]')?.value)||1;
+  const day=form.querySelector('[name="paymentShiftDay"]');
+  if(!day)return;
+  let current=parseInt(day.value)||parseInt(form.querySelector('[name="date"]')?.value)||(q===1?1:16);
+  if(q===1&&current>15)current=Math.min(15,parseInt(form.querySelector('[name="date"]')?.value)||15);
+  if(q===2&&current<16)current=Math.max(16,parseInt(form.querySelector('[name="date"]')?.value)||16);
+  day.value=Math.max(1,Math.min(31,current));
+}
+function removeInstallmentPaymentChange(id,changeId){
+  const item=(state.installments||[]).find(i=>i.id===id);if(!item)return;
+  if(!confirm('¿Quitar este cambio de quincena? Los checks históricos no se borrarán.'))return;
+  item.paymentQuincenaChanges=getInstallmentPaymentChanges(item).filter(c=>c.id!==changeId);
+  saveState();openInstallmentRecordModal(id);
+}
+
 function syncInstallmentStartFields(form,source='monthly'){
   if(!form)return;
   const monthField=form.querySelector('[name="startMonth"]');
@@ -4067,7 +4203,8 @@ function updateInstallmentProgressiveForm(form){
   form.querySelector('[data-payment-biweekly]')?.classList.toggle('hidden',paymentMode!=='biweekly');
   form.querySelector('[data-apart-monthly]')?.classList.toggle('hidden',apartMode!=='monthly');
   form.querySelector('[data-apart-biweekly]')?.classList.toggle('hidden',apartMode!=='biweekly');
-  form.querySelector('[data-apart-sequential]')?.classList.toggle('hidden',!(apartMode==='biweekly'&&paymentMode==='biweekly'));
+  const apartStrategy=form.querySelector('[name="installmentApartStrategy"]:checked')?.value||'split';
+  form.querySelector('[data-apart-sequential]')?.classList.toggle('hidden',!(apartMode==='biweekly'&&paymentMode==='biweekly'&&apartStrategy==='split'));
 
   // Mantener sincronizados los campos de inicio que usa la lógica existente.
   const startMonth=form.querySelector('[name="startMonth"]');
@@ -4091,6 +4228,10 @@ function updateInstallmentProgressiveForm(form){
   if(apartPlan){
     if(apartMode==='monthly'){
       apartPlan.value='Apartado mensual';
+    }else if(apartStrategy==='q1'){
+      apartPlan.value='Apartar todo en Q1';
+    }else if(apartStrategy==='q2'){
+      apartPlan.value='Apartar todo en Q2';
     }else{
       apartPlan.value=paymentMode==='biweekly'
         ? 'Dividir en varias quincenas de apartado'
@@ -4111,6 +4252,13 @@ function updateInstallmentProgressiveForm(form){
 
   const qAmount=parseFloat(form.querySelector('[name="quincenaAmount"]')?.value)||0;
   const effectiveAmount=paymentMode==='monthly'?monthly:(qAmount*2);
+  if(apartMode==='biweekly'){
+    const q1=form.querySelector('[name="manualQ1"]'),q2=form.querySelector('[name="manualQ2"]');
+    if(q1&&q2){
+      if(apartStrategy==='q1'){q1.value=effectiveAmount;q2.value=0;}
+      else if(apartStrategy==='q2'){q1.value=0;q2.value=effectiveAmount;}
+    }
+  }
 
   const apartMonthlyAmount=form.querySelector('[data-apart-monthly-amount]');
   if(apartMonthlyAmount)apartMonthlyAmount.textContent=fmt(effectiveAmount);
@@ -4171,18 +4319,68 @@ function updateInstallmentProgressiveForm(form){
   };
   paintGroup('paymentMode','menta');
   paintGroup('apartMode','azul');
+  paintGroup('installmentApartStrategy','azul');
 
   lucide.createIcons();
 }
 
 
 
+function getQuincenaStrategyFromPlan(plan,type='payment'){
+  if(type==='payment'){
+    if(plan==='Pagar todo en Q1')return 'q1';
+    if(plan==='Pagar todo en Q2')return 'q2';
+    return 'split';
+  }
+  if(plan==='Apartar todo en Q1')return 'q1';
+  if(plan==='Apartar todo en Q2')return 'q2';
+  return 'split';
+}
+function quincenaStrategyButtons(name,current,color='azul'){
+  const options=[['q1','Todo en Q1'],['q2','Todo en Q2'],['split','Dividir']];
+  const activeCls=color==='durazno'
+    ? 'bg-durazno-50 border-durazno-200 text-durazno-600 ring-1 ring-durazno-100'
+    : color==='lila'
+      ? 'bg-lila-50 border-lila-200 text-lila-600 ring-1 ring-lila-100'
+      : 'bg-azul-50 border-azul-200 text-azul-600 ring-1 ring-azul-100';
+  return `<div class="grid grid-cols-3 gap-2" data-strategy-group="${name}">${options.map(([value,label])=>`<label class="cursor-pointer"><input type="radio" name="${name}" value="${value}" ${String(current)===value?'checked':''} onchange="applyQuincenaStrategy(this.form,'${name}')" class="sr-only"><div class="rounded-xl border px-3 py-2.5 flex items-center justify-center text-center transition ${String(current)===value?activeCls:'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}"><span class="text-[10px] font-bold">${label}</span></div></label>`).join('')}</div>`;
+}
+function applyQuincenaStrategy(form,name){
+  if(!form)return;
+  const configs={
+    fixedPaymentStrategy:{q1:'paymentManualQ1',q2:'paymentManualQ2',amount:'amount',update:'updateFixedProgressiveForm'},
+    fixedApartStrategy:{q1:'manualQ1',q2:'manualQ2',amount:'amount',update:'updateFixedProgressiveForm'},
+    variablePaymentStrategy:{q1:'paymentManualQ1',q2:'paymentManualQ2',amount:'amount',update:'updateVariableProgressiveForm'},
+    variableApartStrategy:{q1:'manualQ1',q2:'manualQ2',amount:'amount',update:'updateVariableProgressiveForm'},
+    installmentApartStrategy:{q1:'manualQ1',q2:'manualQ2',amount:'amount',update:'updateInstallmentProgressiveForm'}
+  };
+  const cfg=configs[name];if(!cfg)return;
+  const strategy=form.querySelector(`[name="${name}"]:checked`)?.value||'split';
+  let total=parseFloat(form.querySelector(`[name="${cfg.amount}"]`)?.value)||0;
+  if(name==='installmentApartStrategy'){
+    const paymentMode=form.querySelector('[name="paymentMode"]:checked')?.value||'monthly';
+    const monthly=parseFloat(form.querySelector('[name="amount"]')?.value)||0;
+    const qAmount=parseFloat(form.querySelector('[name="quincenaAmount"]')?.value)||0;
+    total=paymentMode==='monthly'?monthly:qAmount*2;
+  }
+  const q1=form.querySelector(`[name="${cfg.q1}"]`),q2=form.querySelector(`[name="${cfg.q2}"]`);
+  if(q1&&q2){
+    if(strategy==='q1'){q1.value=total;q2.value=0;}
+    else if(strategy==='q2'){q1.value=0;q2.value=total;}
+    else{q1.value=total/2;q2.value=total/2;}
+  }
+  const updater=window[cfg.update];
+  if(typeof updater==='function')updater(form);
+}
+
 function getFixedProgressiveMode(item){
   const paymentPlan=getPaymentPlan(item||{});
   const apartPlan=getApartPlan(item||{});
+  const savedPaymentMode=['monthly','biweekly'].includes(item?.paymentUiMode)?item.paymentUiMode:'';
+  const savedApartMode=['monthly','biweekly'].includes(item?.apartUiMode)?item.apartUiMode:'';
   return {
-    paymentMode: paymentPlan==='Pagar mitad en Q1 y mitad en Q2' ? 'biweekly' : 'monthly',
-    apartMode: apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly',
+    paymentMode: savedPaymentMode||(paymentPlan==='Pagar mitad en Q1 y mitad en Q2' ? 'biweekly' : 'monthly'),
+    apartMode: savedApartMode||(apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly'),
     apartQ: apartPlan==='Apartar todo en Q2' ? 2 : 1
   };
 }
@@ -4209,15 +4407,20 @@ function openFixedRecordModal(id=''){
 
   const amount=parseFloat(val('amount',0))||0;
   const date=parseInt(val('date',1))||1;
+  const fixedPaymentPlan=getPaymentPlan(item||{});
+  const fixedApartPlan=getApartPlan(item||{});
+  const paymentStrategy=getQuincenaStrategyFromPlan(fixedPaymentPlan,'payment');
+  const apartStrategy=getQuincenaStrategyFromPlan(fixedApartPlan,'apart');
 
-  const payQ1=parseFloat(val('paymentManualQ1',0))||amount/2;
-  const payQ2=parseFloat(val('paymentManualQ2',0))||amount/2;
+  const payQ1Raw=parseFloat(val('paymentManualQ1',0))||0;
+  const payQ2Raw=parseFloat(val('paymentManualQ2',0))||0;
+  const payQ1=payQ1Raw>0?payQ1Raw:(paymentStrategy==='q1'?amount:paymentStrategy==='q2'?0:amount/2);
+  const payQ2=payQ2Raw>0?payQ2Raw:(paymentStrategy==='q2'?amount:paymentStrategy==='q1'?0:amount/2);
 
   const apartQ1Raw=parseFloat(val('manualQ1',0))||0;
   const apartQ2Raw=parseFloat(val('manualQ2',0))||0;
-  const fixedApartPlan=getApartPlan(item||{});
-  const apartQ1=apartQ1Raw>0?apartQ1Raw:(fixedApartPlan==='Apartar todo en Q1'?amount:fixedApartPlan==='Apartar todo en Q2'?0:amount/2);
-  const apartQ2=apartQ2Raw>0?apartQ2Raw:(fixedApartPlan==='Apartar todo en Q2'?amount:fixedApartPlan==='Apartar todo en Q1'?0:amount/2);
+  const apartQ1=apartQ1Raw>0?apartQ1Raw:(apartStrategy==='q1'?amount:apartStrategy==='q2'?0:amount/2);
+  const apartQ2=apartQ2Raw>0?apartQ2Raw:(apartStrategy==='q2'?amount:apartStrategy==='q1'?0:amount/2);
 
   const startMonth=parseInt(val('startMonth',val('month',state.currentMonth)));
   const startYear=parseInt(val('startYear',val('year',state.currentYear)))||state.currentYear;
@@ -4287,6 +4490,10 @@ function openFixedRecordModal(id=''){
           </div>
 
           <div data-fixed-payment-biweekly class="${mode.paymentMode==='biweekly'?'':'hidden'} space-y-3">
+            <div>
+              <div class="text-[10px] font-semibold text-gray-500 mb-2">¿En qué quincena quieres pagar?</div>
+              ${quincenaStrategyButtons('fixedPaymentStrategy',paymentStrategy,'lila')}
+            </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="rounded-xl border border-gray-100 bg-white p-3">
                 <div class="text-[10px] font-bold text-gray-500 mb-2">Q1</div>
@@ -4335,6 +4542,10 @@ function openFixedRecordModal(id=''){
           </div>
 
           <div data-fixed-apart-biweekly class="${mode.apartMode==='biweekly'?'':'hidden'} space-y-3">
+            <div>
+              <div class="text-[10px] font-semibold text-gray-500 mb-2">¿Cómo quieres hacer el apartado?</div>
+              ${quincenaStrategyButtons('fixedApartStrategy',apartStrategy,'azul')}
+            </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs mb-1 text-gray-500">Apartar en Q1</label>
@@ -4427,16 +4638,29 @@ function updateFixedProgressiveForm(form){
   const endWrap=form.querySelector('[data-fixed-end-wrap]');
   if(endWrap)endWrap.classList.toggle('hidden',form.querySelector('[name="hasEndDate"]')?.value!=='yes');
 
+  const paymentStrategy=form.querySelector('[name="fixedPaymentStrategy"]:checked')?.value||'split';
+  const apartStrategy=form.querySelector('[name="fixedApartStrategy"]:checked')?.value||'split';
   const paymentPlan=form.querySelector('[name="paymentPlan"]');
   if(paymentPlan){
     paymentPlan.value=paymentMode==='biweekly'
-      ? 'Pagar mitad en Q1 y mitad en Q2'
+      ? (paymentStrategy==='q1'?'Pagar todo en Q1':paymentStrategy==='q2'?'Pagar todo en Q2':'Pagar mitad en Q1 y mitad en Q2')
       : (date<=15?'Pagar todo en Q1':'Pagar todo en Q2');
   }
 
   const apartPlan=form.querySelector('[name="apartPlan"]');
   if(apartPlan){
-    apartPlan.value=apartMode==='monthly' ? 'Apartado mensual' : 'Dividir apartado en Q1 y Q2';
+    apartPlan.value=apartMode==='monthly'
+      ? 'Apartado mensual'
+      : (apartStrategy==='q1'?'Apartar todo en Q1':apartStrategy==='q2'?'Apartar todo en Q2':'Dividir apartado en Q1 y Q2');
+  }
+
+  if(paymentMode==='biweekly'){
+    const q1=form.querySelector('[name="paymentManualQ1"]'),q2=form.querySelector('[name="paymentManualQ2"]');
+    if(q1&&q2){if(paymentStrategy==='q1'){q1.value=amount;q2.value=0;}else if(paymentStrategy==='q2'){q1.value=0;q2.value=amount;}}
+  }
+  if(apartMode==='biweekly'){
+    const q1=form.querySelector('[name="manualQ1"]'),q2=form.querySelector('[name="manualQ2"]');
+    if(q1&&q2){if(apartStrategy==='q1'){q1.value=amount;q2.value=0;}else if(apartStrategy==='q2'){q1.value=0;q2.value=amount;}}
   }
 
   const hint=form.querySelector('[data-fixed-payment-q-hint]');
@@ -4457,6 +4681,8 @@ function updateFixedProgressiveForm(form){
   };
   paintGroup('fixedPaymentMode','lila');
   paintGroup('fixedApartMode','azul');
+  paintGroup('fixedPaymentStrategy','lila');
+  paintGroup('fixedApartStrategy','azul');
 
   const summary=form.querySelector('[data-fixed-live-summary]');
   if(summary){
@@ -4500,9 +4726,11 @@ function updateFixedProgressiveForm(form){
 function getVariableProgressiveMode(item){
   const paymentPlan=getPaymentPlan(item||{});
   const apartPlan=getApartPlan(item||{});
+  const savedPaymentMode=['monthly','biweekly'].includes(item?.paymentUiMode)?item.paymentUiMode:'';
+  const savedApartMode=['monthly','biweekly'].includes(item?.apartUiMode)?item.apartUiMode:'';
   return {
-    paymentMode: paymentPlan==='Pagar mitad en Q1 y mitad en Q2' ? 'biweekly' : 'monthly',
-    apartMode: apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly',
+    paymentMode: savedPaymentMode||(paymentPlan==='Pagar mitad en Q1 y mitad en Q2' ? 'biweekly' : 'monthly'),
+    apartMode: savedApartMode||(apartPlan==='Apartado mensual' ? 'monthly' : 'biweekly'),
     apartQ: apartPlan==='Apartar todo en Q2' ? 2 : 1
   };
 }
@@ -4531,15 +4759,20 @@ function openVariableRecordModal(id=''){
   const amount=parseFloat(val('amount',0))||0;
   const estimated=parseFloat(val('estimatedAmount',0))||0;
   const date=parseInt(val('date',1))||1;
+  const variablePaymentPlan=getPaymentPlan(item||{});
+  const variableApartPlan=getApartPlan(item||{});
+  const paymentStrategy=getQuincenaStrategyFromPlan(variablePaymentPlan,'payment');
+  const apartStrategy=getQuincenaStrategyFromPlan(variableApartPlan,'apart');
 
-  const paymentQ1=parseFloat(val('paymentManualQ1',0))||amount/2;
-  const paymentQ2=parseFloat(val('paymentManualQ2',0))||amount/2;
+  const paymentQ1Raw=parseFloat(val('paymentManualQ1',0))||0;
+  const paymentQ2Raw=parseFloat(val('paymentManualQ2',0))||0;
+  const paymentQ1=paymentQ1Raw>0?paymentQ1Raw:(paymentStrategy==='q1'?amount:paymentStrategy==='q2'?0:amount/2);
+  const paymentQ2=paymentQ2Raw>0?paymentQ2Raw:(paymentStrategy==='q2'?amount:paymentStrategy==='q1'?0:amount/2);
 
   const apartQ1Raw=parseFloat(val('manualQ1',0))||0;
   const apartQ2Raw=parseFloat(val('manualQ2',0))||0;
-  const variableApartPlan=getApartPlan(item||{});
-  const apartQ1=apartQ1Raw>0?apartQ1Raw:(variableApartPlan==='Apartar todo en Q1'?amount:variableApartPlan==='Apartar todo en Q2'?0:amount/2);
-  const apartQ2=apartQ2Raw>0?apartQ2Raw:(variableApartPlan==='Apartar todo en Q2'?amount:variableApartPlan==='Apartar todo en Q1'?0:amount/2);
+  const apartQ1=apartQ1Raw>0?apartQ1Raw:(apartStrategy==='q1'?amount:apartStrategy==='q2'?0:amount/2);
+  const apartQ2=apartQ2Raw>0?apartQ2Raw:(apartStrategy==='q2'?amount:apartStrategy==='q1'?0:amount/2);
 
   const month=parseInt(val('month',state.currentMonth));
   const year=parseInt(val('year',state.currentYear))||state.currentYear;
@@ -4630,6 +4863,10 @@ function openVariableRecordModal(id=''){
 
           <!-- Pago por quincenas -->
           <div data-variable-payment-biweekly class="${mode.paymentMode==='biweekly'?'':'hidden'} space-y-3">
+            <div>
+              <div class="text-[10px] font-semibold text-gray-500 mb-2">¿En qué quincena quieres pagar?</div>
+              ${quincenaStrategyButtons('variablePaymentStrategy',paymentStrategy,'durazno')}
+            </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="rounded-xl border border-gray-100 bg-white p-3">
                 <div class="text-[10px] font-bold text-gray-500 mb-2">Q1</div>
@@ -4681,6 +4918,10 @@ function openVariableRecordModal(id=''){
 
           <!-- Apartado por quincenas -->
           <div data-variable-apart-biweekly class="${mode.apartMode==='biweekly'?'':'hidden'} space-y-3">
+            <div>
+              <div class="text-[10px] font-semibold text-gray-500 mb-2">¿Cómo quieres hacer el apartado?</div>
+              ${quincenaStrategyButtons('variableApartStrategy',apartStrategy,'azul')}
+            </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs mb-1 text-gray-500">Apartar en Q1</label>
@@ -4757,16 +4998,29 @@ function updateVariableProgressiveForm(form){
   form.querySelector('[data-variable-apart-monthly]')?.classList.toggle('hidden',apartMode!=='monthly');
   form.querySelector('[data-variable-apart-biweekly]')?.classList.toggle('hidden',apartMode!=='biweekly');
 
+  const paymentStrategy=form.querySelector('[name="variablePaymentStrategy"]:checked')?.value||'split';
+  const apartStrategy=form.querySelector('[name="variableApartStrategy"]:checked')?.value||'split';
   const paymentPlan=form.querySelector('[name="paymentPlan"]');
   if(paymentPlan){
     paymentPlan.value=paymentMode==='biweekly'
-      ? 'Pagar mitad en Q1 y mitad en Q2'
+      ? (paymentStrategy==='q1'?'Pagar todo en Q1':paymentStrategy==='q2'?'Pagar todo en Q2':'Pagar mitad en Q1 y mitad en Q2')
       : (date<=15?'Pagar todo en Q1':'Pagar todo en Q2');
   }
 
   const apartPlan=form.querySelector('[name="apartPlan"]');
   if(apartPlan){
-    apartPlan.value=apartMode==='monthly' ? 'Apartado mensual' : 'Dividir apartado en Q1 y Q2';
+    apartPlan.value=apartMode==='monthly'
+      ? 'Apartado mensual'
+      : (apartStrategy==='q1'?'Apartar todo en Q1':apartStrategy==='q2'?'Apartar todo en Q2':'Dividir apartado en Q1 y Q2');
+  }
+
+  if(paymentMode==='biweekly'){
+    const q1=form.querySelector('[name="paymentManualQ1"]'),q2=form.querySelector('[name="paymentManualQ2"]');
+    if(q1&&q2){if(paymentStrategy==='q1'){q1.value=amount;q2.value=0;}else if(paymentStrategy==='q2'){q1.value=0;q2.value=amount;}}
+  }
+  if(apartMode==='biweekly'){
+    const q1=form.querySelector('[name="manualQ1"]'),q2=form.querySelector('[name="manualQ2"]');
+    if(q1&&q2){if(apartStrategy==='q1'){q1.value=amount;q2.value=0;}else if(apartStrategy==='q2'){q1.value=0;q2.value=amount;}}
   }
 
   const hint=form.querySelector('[data-variable-payment-q-hint]');
@@ -4790,6 +5044,8 @@ function updateVariableProgressiveForm(form){
 
   paintGroup('variablePaymentMode','durazno');
   paintGroup('variableApartMode','azul');
+  paintGroup('variablePaymentStrategy','durazno');
+  paintGroup('variableApartStrategy','azul');
 
   const summary=form.querySelector('[data-variable-live-summary]');
   if(summary){
@@ -4976,6 +5232,8 @@ function saveRecordForm(event,type,id=''){
   const form=event.target,fd=new FormData(form),collection=type==='installment'?'installments':type==='fixed'?'fixed':'variable',item=state[collection]?.find(p=>p.id===id);
   const payload={concept:fd.get('concept')||'-',amount:parseFloat(fd.get('amount'))||0,date:parseInt(fd.get('date'))||1,paymentDayQ1:parseInt(fd.get('paymentDayQ1'))||parseInt(fd.get('date'))||1,paymentDayQ2:parseInt(fd.get('paymentDayQ2'))||parseInt(fd.get('date'))||16,payDayQ1:parseInt(fd.get('payDayQ1'))||state.config.payDate1||1,payDayQ2:parseInt(fd.get('payDayQ2'))||state.config.payDate2||16,card:fd.get('card')||'',month:item?.month??state.currentMonth,year:item?.year??state.currentYear,paid:item?.paid||false,paidQ1:item?.paidQ1||false,paidQ2:item?.paidQ2||false,apartadoQ1:item?.apartadoQ1||false,apartadoQ2:item?.apartadoQ2||false,splitMode:fd.get('apartPlan')||fd.get('splitMode')||'Dividir apartado en Q1 y Q2',paymentPlan:fd.get('paymentPlan')||'Pagar mitad en Q1 y mitad en Q2',apartPlan:fd.get('apartPlan')||'Dividir apartado en Q1 y Q2',firstSetAside:fd.get('apartFirstQuincena')||fd.get('firstSetAside')||'current-q2',apartFirstQuincena:fd.get('apartFirstQuincena')||'current-q2',paymentFirstQuincena:fd.get('paymentFirstQuincena')||'current-q1',apartQuincenas:parseInt(fd.get('apartQuincenas'))||2,paymentQuincenas:parseInt(fd.get('paymentQuincenas'))||2,manualQ1:parseFloat(fd.get('manualQ1'))||0,manualQ2:parseFloat(fd.get('manualQ2'))||0,paymentManualQ1:parseFloat(fd.get('paymentManualQ1'))||0,paymentManualQ2:parseFloat(fd.get('paymentManualQ2'))||0,notes:fd.get('notes')||item?.notes||''};
   if(type==='fixed'){
+    payload.paymentUiMode=fd.get('fixedPaymentMode')||item?.paymentUiMode||'monthly';
+    payload.apartUiMode=fd.get('fixedApartMode')||item?.apartUiMode||'biweekly';
     payload.category=fd.get('category')||'otros';
     payload.startMonth=parseInt(fd.get('startMonth'));
     if(Number.isNaN(payload.startMonth))payload.startMonth=state.currentMonth;
@@ -4986,12 +5244,17 @@ function saveRecordForm(event,type,id=''){
     payload.month=payload.startMonth;
     payload.year=payload.startYear;
     payload.monthlyStatus=item?.monthlyStatus||{};
+    if(fd.get('fixedPaymentMode')==='biweekly'){
+      const strategy=fd.get('fixedPaymentStrategy')||'split';
+      payload.date=strategy==='q2'?(parseInt(fd.get('paymentDayQ2'))||16):(parseInt(fd.get('paymentDayQ1'))||1);
+    }
     if(fd.get('fixedApartMode')==='monthly'){
       payload.manualQ1=0;
       payload.manualQ2=0;
     }
   }
   if(type==='installment'){
+    payload.apartUiMode=fd.get('apartMode')||item?.apartUiMode||'biweekly';
     const isQuincenal=payload.paymentPlan==='Dividir en varias quincenas de pago';
     const progressiveApartMode=fd.get('apartMode')||'';
     if(progressiveApartMode==='monthly'){
@@ -5011,6 +5274,21 @@ function saveRecordForm(event,type,id=''){
     payload.notes=fd.get('notes')||'';
     payload.monthlyStatus=item?.monthlyStatus||{};
     payload.liquidation=item?.liquidation||null;
+    payload.paymentQuincenaChanges=Array.isArray(item?.paymentQuincenaChanges)?JSON.parse(JSON.stringify(item.paymentQuincenaChanges)):[];
+    if(!isQuincenal&&fd.get('addPaymentQuincenaChange')==='yes'){
+      const shiftQ=parseInt(fd.get('paymentShiftQ'))===2?2:1;
+      const shiftMonth=Math.max(0,Math.min(11,parseInt(fd.get('paymentShiftMonth'))||0));
+      const shiftYear=parseInt(fd.get('paymentShiftYear'))||state.currentYear;
+      const shiftDay=Math.max(1,Math.min(31,parseInt(fd.get('paymentShiftDay'))||(shiftQ===1?1:16)));
+      const baseQ=payload.paymentPlan==='Pagar todo en Q2'?2:1;
+      const firstAbs=monthIndex(payload.startMonth,payload.startYear)*2+(baseQ-1);
+      const shiftAbs=monthIndex(shiftMonth,shiftYear)*2+(shiftQ-1);
+      if(shiftAbs<firstAbs){alert('El cambio de quincena no puede comenzar antes del primer pago de esta deuda.');return;}
+      const existingChange=payload.paymentQuincenaChanges.find(c=>parseInt(c.month)===shiftMonth&&parseInt(c.year)===shiftYear&&parseInt(c.q)===shiftQ);
+      if(existingChange){existingChange.day=shiftDay;}
+      else payload.paymentQuincenaChanges.push({id:uid(),month:shiftMonth,year:shiftYear,q:shiftQ,day:shiftDay,createdAt:new Date().toISOString()});
+      payload.paymentQuincenaChanges.sort((a,b)=>(monthIndex(parseInt(a.month)||0,parseInt(a.year)||state.currentYear)*2+((parseInt(a.q)===2?2:1)-1))-(monthIndex(parseInt(b.month)||0,parseInt(b.year)||state.currentYear)*2+((parseInt(b.q)===2?2:1)-1)));
+    }
 
     if(isQuincenal){
       payload.quincenaAmount=parseFloat(fd.get('quincenaAmount'))||0;
@@ -5036,6 +5314,8 @@ function saveRecordForm(event,type,id=''){
     }
   }
   if(type==='variable'){
+    payload.paymentUiMode=fd.get('variablePaymentMode')||item?.paymentUiMode||'monthly';
+    payload.apartUiMode=fd.get('variableApartMode')||item?.apartUiMode||'biweekly';
     const customCategory=addCategoryIfNeeded(fd.get('newCategory'));
     payload.category=customCategory||fd.get('category')||'otros';
     payload.estimatedAmount=parseFloat(fd.get('estimatedAmount'))||0;
@@ -5052,7 +5332,8 @@ function saveRecordForm(event,type,id=''){
     // En pago mensual usamos una sola fecha; en quincenal las fechas
     // Q1/Q2 se conservan de forma independiente.
     if(fd.get('variablePaymentMode')==='biweekly'){
-      payload.date=parseInt(fd.get('paymentDayQ1'))||1;
+      const strategy=fd.get('variablePaymentStrategy')||'split';
+      payload.date=strategy==='q2'?(parseInt(fd.get('paymentDayQ2'))||16):(parseInt(fd.get('paymentDayQ1'))||1);
     }
   }
   if(item)Object.assign(item,payload);else state[collection].push({id:uid(),...payload});saveState();closeModal();render();
