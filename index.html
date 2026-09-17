@@ -381,9 +381,24 @@ function getInstallmentChangeEffectiveStart(change){
   return {month:baseMonth,year:baseYear,q:parseInt(change?.q)===2?2:1};
 }
 function getInstallmentBasePaymentQ(item){
-  // Para el calendario histórico de un pago a meses manda la forma de pago que quedó
-  // guardada en el registro. El día es solo un fallback para registros muy antiguos.
-  // Esto es importante porque un plan que nació en Q2 debe poder cambiar después Q2→Q1.
+  // La quincena HISTÓRICA debe salir del primer cambio guardado cuando existe.
+  // Ejemplo: si se registra "Q2 → Q1 desde octubre", junio-septiembre deben seguir
+  // siendo Q2 aunque una versión anterior haya dejado paymentPlan/date como Q1.
+  const rawChanges=Array.isArray(item?.paymentQuincenaChanges)?item.paymentQuincenaChanges:[];
+  const firstHistorical=rawChanges
+    .map((c,i)=>{
+      const m=c?.effectiveMonth!==undefined?parseInt(c.effectiveMonth):parseInt(c?.month);
+      const y=c?.effectiveYear!==undefined?parseInt(c.effectiveYear):parseInt(c?.year);
+      const fromQ=parseInt(c?.fromQ);
+      if(!Number.isFinite(m)||!Number.isFinite(y)||![1,2].includes(fromQ))return null;
+      return {m:Math.max(0,Math.min(11,m)),y,fromQ,i};
+    })
+    .filter(Boolean)
+    .sort((a,b)=>monthIndex(a.m,a.y)-monthIndex(b.m,b.y)||a.i-b.i)[0];
+  if(firstHistorical)return firstHistorical.fromQ;
+
+  // Sin cambios históricos, manda la forma de pago guardada. El día queda solo como
+  // fallback para registros muy antiguos.
   const stored=item?.paymentPlan||legacyPlanToNew(getSplitMode(item||{})).paymentPlan;
   if(stored==='Pagar todo en Q2')return 2;
   if(stored==='Pagar todo en Q1')return 1;
@@ -1046,6 +1061,11 @@ function getPaymentPlanAmountForQ(item,q){
   return (dueDay<=15?q===1:q===2)?amount:0;
 }
 function getPaidCheckboxQuincena(item,m=state.currentMonth,y=state.currentYear){
+  if(getPaymentCollection(item)==='installments'&&hasInstallmentPaymentChanges(item)){
+    const qs=getInstallmentScheduledQsForMonth(item,m,y);
+    if(qs.length===1)return qs[0];
+    if(qs.length>1)return 0;
+  }
   const plan=getPaymentPlan(item);
   if(plan==='Pagar todo en Q1') return 1;
   if(plan==='Pagar todo en Q2') return 2;
@@ -4017,7 +4037,7 @@ function openInstallmentRecordModal(id=''){
   const apartStrategy=getQuincenaStrategyFromPlan(apartPlanValue,'apart');
   const mode=getInstallmentFormMode(item||{});
   const hasHistoricalActivity=!!item&&Object.values(item.monthlyStatus||{}).some(s=>s&&(s.paid||s.paidQ1||s.paidQ2||s.apartadoQ1||s.apartadoQ2||s.apartadoMes));
-  const historicalPaymentQ=paymentPlanValue==='Pagar todo en Q2'?2:1;
+  const historicalPaymentQ=item?getInstallmentBasePaymentQ(item):(paymentPlanValue==='Pagar todo en Q2'?2:1);
 
   const totalMonths=Math.max(1,parseInt(val('totalMonths',1))||1);
   const totalAmount=parseFloat(val('totalAmount',0))||0;
@@ -4025,9 +4045,10 @@ function openInstallmentRecordModal(id=''){
   const qAmount=parseFloat(val('quincenaAmount',0))||(monthlyAmount/2)||0;
 
   const date=parseInt(val('date',1))||1;
-  const paymentMonthlyQ=getPaymentPlan(item||{})==='Pagar todo en Q2' ? 2 :
+  const paymentMonthlyQ=item?getInstallmentBasePaymentQ(item):(
+                        getPaymentPlan(item||{})==='Pagar todo en Q2' ? 2 :
                         getPaymentPlan(item||{})==='Pagar todo en Q1' ? 1 :
-                        (date<=15?1:2);
+                        (date<=15?1:2));
 
   const apartQ1Raw=parseFloat(val('manualQ1',0))||0;
   const apartQ2Raw=parseFloat(val('manualQ2',0))||0;
@@ -4389,8 +4410,9 @@ function cancelInstallmentPaymentChangeEdit(form){
   form.querySelector('[name="paymentShiftEditId"]').value='';
   const title=form.querySelector('[data-payment-change-editor-title]');if(title)title.textContent='Nuevo cambio';
   form.querySelector('[data-payment-change-cancel-edit]')?.classList.add('hidden');
+  const item=(state.installments||[]).find(i=>i.id===form.dataset.itemId);
   const oldPlan=form.querySelector('[name="originalPaymentPlan"]')?.value||'';
-  const fromQ=oldPlan==='Pagar todo en Q2'?2:1;
+  const fromQ=item?getInstallmentBasePaymentQ(item):(oldPlan==='Pagar todo en Q2'?2:1);
   const toQ=fromQ===1?2:1;
   form.querySelector('[name="paymentShiftFromQ"]').value=String(fromQ);
   form.querySelector('[name="paymentShiftQ"]').value=String(toQ);
@@ -6109,6 +6131,11 @@ function runSmokeTests(){
     console.assert(getInstallmentPaymentChanges(smokeQ1toQ2).some(c=>c.fromQ===1&&c.q===2),'Q1→Q2 se conserva');
     console.assert(getInstallmentMonthlyPaymentTargets(smokeQ2toQ1).some(t=>t.month===9&&t.year===2026&&t.q===1),'Q2→Q1 se visualiza en calendario');
     console.assert(getInstallmentMonthlyPaymentTargets(smokeQ1toQ2).some(t=>t.month===9&&t.year===2026&&t.q===2),'Q1→Q2 se visualiza en calendario');
+    // El "Se pagaba en" del primer cambio manda sobre metadatos viejos contradictorios.
+    const smokeBaseCorrupto={id:'smoke-base-corrupto',paymentPlan:'Pagar todo en Q1',date:2,totalMonths:6,amount:100,startMonth:5,startYear:2026,monthlyStatus:{},paymentQuincenaChanges:[{id:'c3',month:9,year:2026,fromQ:2,q:1,day:2,createdAt:'2026-09-17T00:00:00.000Z'}]};
+    const smokeTargets=getInstallmentMonthlyPaymentTargets(smokeBaseCorrupto);
+    console.assert(smokeTargets.filter(t=>monthIndex(t.month,t.year)<monthIndex(9,2026)).every(t=>t.q===2),'Q2→Q1 conserva Q2 antes del mes elegido');
+    console.assert(smokeTargets.filter(t=>monthIndex(t.month,t.year)>=monthIndex(9,2026)).every(t=>t.q===1),'Q2→Q1 aplica Q1 solo desde el mes elegido');
     for(let m=0;m<12;m++){
       [1,2].forEach(q=>{
         const planned=getBiweeklyPlannedTotal(q,m,state.currentYear);
