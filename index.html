@@ -3105,7 +3105,9 @@ function toggleAllInstallmentDetails(open){
 function renderInstallmentsView(){
   const items=state.installments||[];
   const activeThisMonth=items.filter(i=>isInstallmentRelevantInMonth(i,state.currentMonth,state.currentYear)&&getInstallmentRemainingAmount(i)>0&&!isInstallmentLiquidated(i));
-  const ongoing=items.filter(i=>getInstallmentRemainingAmount(i)>0&&!isInstallmentLiquidated(i));
+  // "Activas" = planes que realmente pertenecen al mes/año que estás viendo.
+  // Un saldo pendiente por sí solo no vuelve activo a un plan fuera de su periodo.
+  const ongoing=items.filter(i=>isInstallmentRelevantInMonth(i,state.currentMonth,state.currentYear)&&getInstallmentRemainingAmount(i)>0&&!isInstallmentLiquidated(i));
   const finished=items.filter(i=>isInstallmentLiquidated(i)||getInstallmentRemainingAmount(i)<=0);
   const totalDebt=items.reduce((s,i)=>s+(parseFloat(i.totalAmount)||0),0);
   const activeMonthly=activeThisMonth.reduce((s,i)=>s+(getPaymentPlan(i)==='Dividir en varias quincenas de pago'?(getInstallmentPaymentTarget(i,1,state.currentMonth,state.currentYear)?.amount||0)+(getInstallmentPaymentTarget(i,2,state.currentMonth,state.currentYear)?.amount||0):(parseFloat(i.amount)||0)),0);
@@ -3121,7 +3123,7 @@ function renderInstallmentsView(){
     const liquidated=isInstallmentLiquidated(item);
     const remaining=getInstallmentRemainingAmount(item);
     const activeNow=isInstallmentRelevantInMonth(item,state.currentMonth,state.currentYear);
-    if(installmentViewFilter==='ongoing' && !(remaining>0&&!liquidated)) return false;
+    if(installmentViewFilter==='ongoing' && !(activeNow&&remaining>0&&!liquidated)) return false;
     if(installmentViewFilter==='month' && !(activeNow&&remaining>0&&!liquidated)) return false;
     if(installmentViewFilter==='done' && !(liquidated||remaining<=0)) return false;
     if(installmentViewSearch){
