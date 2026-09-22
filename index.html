@@ -503,27 +503,46 @@ function getInstallmentMonthlyPaymentTargets(item){
 }
 function getInstallmentPaymentTargets(item){
   if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
-    const generated=getSequentialQuincenaTargets(item,'payment');
     const saved=Array.isArray(item.paymentSchedule)?item.paymentSchedule:[];
-    const defaultAmount=parseFloat(item.quincenaAmount)||((parseFloat(item.amount)||0)/2)||0;
+    const count=Math.max(1,parseInt(item.paymentQuincenas)||0,saved.length||0);
+    const generated=getSequentialQuincenaTargets({...item,paymentQuincenas:count},'payment');
+    const fallbackAmount=(parseFloat(item.quincenaAmount)||0)>0
+      ? parseFloat(item.quincenaAmount)
+      : (((parseFloat(item.amount)||0)/2)||0);
     return generated.map((t,i)=>{
       const existing=saved.find(s=>parseInt(s.index)===i+1)||saved[i]||{};
       const baseDay=t.q===1?(parseInt(item.paymentDayQ1)||parseInt(item.date)||1):(parseInt(item.paymentDayQ2)||parseInt(item.date)||16);
       const safeDay=Math.max(1,Math.min(baseDay,getDaysInMonth(t.month,t.year)));
+      const date=existing.date||isoDate(t.year,t.month,safeDay);
+      let realMonth=t.month,realYear=t.year,realQ=t.q;
+      const parts=String(date||'').split('-').map(Number);
+      if(parts.length===3&&parts[0]&&parts[1]&&parts[2]){
+        realYear=parts[0];
+        realMonth=Math.max(0,Math.min(11,parts[1]-1));
+        realQ=parts[2]<=15?1:2;
+      }
+      const existingAmount=parseFloat(existing.amount);
+      const amount=Number.isFinite(existingAmount)?existingAmount:fallbackAmount;
       return {
         index:i+1,
-        month:t.month,
-        year:t.year,
-        q:t.q,
-        date:existing.date||isoDate(t.year,t.month,safeDay),
-        amount:parseFloat(existing.amount)||defaultAmount
+        month:realMonth,
+        year:realYear,
+        q:realQ,
+        date,
+        amount
       };
     });
   }
   return hasInstallmentPaymentChanges(item)?getInstallmentMonthlyPaymentTargets(item):[];
 }
+function getInstallmentPaymentTargetsForQuincena(item,q,m=item.__viewMonth??state.currentMonth,y=item.__viewYear??state.currentYear){
+  return getInstallmentPaymentTargets(item).filter(t=>t.q===q&&t.month===m&&t.year===y);
+}
+function getInstallmentPaymentAmountForQuincena(item,q,m=item.__viewMonth??state.currentMonth,y=item.__viewYear??state.currentYear){
+  return getInstallmentPaymentTargetsForQuincena(item,q,m,y).reduce((sum,t)=>sum+(parseFloat(t.amount)||0),0);
+}
 function getInstallmentPaymentTarget(item,q,m=item.__viewMonth??state.currentMonth,y=item.__viewYear??state.currentYear){
-  return getInstallmentPaymentTargets(item).find(t=>t.q===q&&t.month===m&&t.year===y)||null;
+  return getInstallmentPaymentTargetsForQuincena(item,q,m,y)[0]||null;
 }
 function getInstallmentScheduledQsForMonth(item,m=state.currentMonth,y=state.currentYear){
   return getInstallmentPaymentTargets(item).filter(t=>t.month===m&&t.year===y).sort((a,b)=>a.q-b.q).map(t=>t.q);
@@ -743,7 +762,8 @@ function getInstallmentPeriodText(item){
   if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
     const targets=getInstallmentPaymentTargets(item);
     if(targets.length){
-      const first=targets[0],last=targets[targets.length-1];
+      const ordered=[...targets].sort((a,b)=>isoDateKey(a.date)-isoDateKey(b.date));
+      const first=ordered[0],last=ordered[ordered.length-1];
       return `${formatShortDate(first.date)} - ${formatShortDate(last.date)} · ${targets.length} cuotas`;
     }
   }
@@ -775,6 +795,15 @@ function getPaymentsForMonth(m,y){const fixed=state.fixed.filter(p=>isFixedActiv
 function getPaymentCollection(item){if(item.__collection)return item.__collection;if(state.fixed.some(p=>p.id===item.id))return 'fixed';if(state.installments.some(p=>p.id===item.id))return 'installments';if(state.variable.some(p=>p.id===item.id))return 'variable';if((state.savingsGoals||[]).some(p=>p.id===item.id))return 'goalContrib';if(state.savings.some(p=>p.id===item.id))return 'savings';return '';}
 function getPaymentType(item){const c=getPaymentCollection(item);return c==='fixed'?'fijo':c==='installments'?'meses':c==='variable'?'variado':'ahorro';}
 function getPaymentAmount(item){return parseFloat(item.amount||item.estimatedAmount||0)||0;}
+function getDashboardRowAmount(item,q){
+  const col=getPaymentCollection(item);
+  if(col==='savings')return isSavingConfirmed(item)?getSavingRealAmount(item):getSavingPlannedAmount(item);
+  if(col==='installments'&&getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
+    const scheduled=getInstallmentPaymentAmountForQuincena(item,q,item.__viewMonth??state.currentMonth,item.__viewYear??state.currentYear);
+    if(scheduled>0)return scheduled;
+  }
+  return getPaymentAmount(item);
+}
 function getPaymentDayForQuincena(item,q){
   const fallback=q===1?(state.config.payDate1||1):(state.config.payDate2||16);
   const custom=q===1?item.payDayQ1:item.payDayQ2;
@@ -807,6 +836,8 @@ function getInstallmentApartChanges(item){
     manualQ1:parseFloat(c.manualQ1)||0,
     manualQ2:parseFloat(c.manualQ2)||0,
     apartUiMode:c.apartUiMode||((c.apartPlan==='Apartado mensual')?'monthly':'biweekly'),
+    apartQuincenas:Math.max(1,parseInt(c.apartQuincenas)||parseInt(item?.apartQuincenas)||2),
+    apartFirstQuincena:c.apartFirstQuincena||item?.apartFirstQuincena||item?.firstSetAside||'current-q1',
     createdAt:c.createdAt||''
   })).sort((a,b)=>monthIndex(a.month,a.year)-monthIndex(b.month,b.year)||(Date.parse(a.createdAt||'')||0)-(Date.parse(b.createdAt||'')||0));
 }
@@ -815,7 +846,11 @@ function getInstallmentApartConfig(item,m=state.currentMonth,y=state.currentYear
     apartPlan:item?.apartPlan||legacyPlanToNew(getSplitMode(item||{})).apartPlan,
     manualQ1:parseFloat(item?.manualQ1)||0,
     manualQ2:parseFloat(item?.manualQ2)||0,
-    apartUiMode:item?.apartUiMode||((item?.apartPlan==='Apartado mensual')?'monthly':'biweekly')
+    apartUiMode:item?.apartUiMode||((item?.apartPlan==='Apartado mensual')?'monthly':'biweekly'),
+    apartQuincenas:Math.max(1,parseInt(item?.apartQuincenas)||2),
+    apartFirstQuincena:item?.apartFirstQuincena||item?.firstSetAside||'current-q1',
+    month:item?.startMonth??item?.month??state.currentMonth,
+    year:item?.startYear??item?.year??state.currentYear
   };
   const target=monthIndex(m,y);
   getInstallmentApartChanges(item).forEach(c=>{
@@ -938,6 +973,13 @@ function getAmountToSetAside(item,q){
       return liq+(wasPaid?regular:0);
     }
     if(isInstallmentTargetCancelledByLiquidation(item,q,viewMonth,viewYear))return 0;
+    // En un plan que SE PAGA por quincenas, el calendario real manda también para el
+    // apartado dividido. Si una cuota cae en Q1/Q2, esa misma cuota se aparta ahí.
+    // Esto evita ceros falsos cuando el calendario fue editado o cuando un plan viejo
+    // tenía un contador de quincenas de apartado ya agotado.
+    if(getPaymentPlan(item)==='Dividir en varias quincenas de pago' && plan==='Dividir en varias quincenas de apartado'){
+      return getInstallmentPaymentAmountForQuincena(item,q,viewMonth,viewYear);
+    }
     if(hasInstallmentPaymentChanges(item)&&['Apartar todo en Q1','Apartar todo en Q2'].includes(plan)){
       const target=getInstallmentPaymentTarget(item,q,viewMonth,viewYear);
       if(target)return parseFloat(target.amount)||amount;
@@ -1075,8 +1117,7 @@ function getPaymentPlanAmountForQ(item,q){
       return 0;
     }
     if(getPaymentPlan(item)==='Dividir en varias quincenas de pago'){
-      const target=getInstallmentPaymentTarget(item,q,vm,vy);
-      return target?(parseFloat(target.amount)||0):0;
+      return getInstallmentPaymentAmountForQuincena(item,q,vm,vy);
     }
   }
   const amount=getPaymentAmount(item),plan=getPaymentPlan(item);
@@ -2014,7 +2055,7 @@ function renderBiweekly(){
 
     let rows=items.map(item=>{
       const type=getPaymentType(item),col=getPaymentCollection(item),cat=getCategoryVisual(type),aq=getAmountToSetAside(item,q);
-      const amount=col==='savings'?(isSavingConfirmed(item)?getSavingRealAmount(item):getSavingPlannedAmount(item)):getPaymentAmount(item);
+      const amount=getDashboardRowAmount(item,q);
       const status=getPaymentStatusForQuincena(item,q),vis=getStatusVisual(status);
       const apartadoCell=aq<=0
         ? `<span class="text-gray-300">—</span>`
@@ -4341,10 +4382,10 @@ function openInstallmentRecordModal(id=''){
                   <input type="number" step="any" min="0" name="manualQ2" value="${apartQ2}" oninput="updateInstallmentProgressiveForm(this.form)" class="w-full border rounded-lg px-3 py-2 text-sm bg-white">
                 </div>
               </div>
-              <div class="mt-2 text-[10px] text-gray-400">Puedes dejarlo 50/50 o mover más dinero a una quincena.</div>
+              <div class="mt-2 text-[10px] text-gray-400">Puedes dejarlo 50/50 o mover más dinero a una quincena. Si el pago es por quincenas, la app toma las <b>fechas y montos reales del calendario de cuotas</b>.</div>
             </div>
 
-            <div data-apart-sequential class="${mode.paymentMode==='biweekly'?'':'hidden'} space-y-3">
+            <div data-apart-sequential class="hidden space-y-3">
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-xs mb-1 text-gray-500">Número de quincenas para apartar</label>
@@ -4362,7 +4403,8 @@ function openInstallmentRecordModal(id=''){
 
           ${item?`<div class="mt-4 rounded-xl border border-azul-100 bg-white/80 p-3">
             <div class="flex items-start gap-2"><span class="w-8 h-8 rounded-lg bg-azul-50 text-azul-600 flex items-center justify-center shrink-0"><i data-lucide="history" class="w-4 h-4"></i></span><div><div class="text-[11px] font-bold text-gray-700">Cambiar apartado sin modificar el pasado</div><div class="text-[10px] text-gray-400 mt-0.5">Si cambias la distribución de arriba, se aplicará únicamente desde el mes que elijas aquí.</div></div></div>
-            ${getInstallmentApartChanges(item).length?`<div class="mt-3 space-y-1.5"><div class="text-[9px] uppercase tracking-wide font-bold text-gray-400">Cambios de apartado guardados</div>${getInstallmentApartChanges(item).map(c=>`<div class="rounded-lg bg-azul-50/55 border border-azul-100 px-3 py-2 text-[10px] text-gray-600"><b class="text-azul-600">${escapeHtml(c.apartPlan)}</b><span class="text-gray-400"> · desde ${MONTHS[c.month]} ${c.year}${c.apartPlan==='Apartado mensual'?'':` · Q1 ${fmt(c.manualQ1)} / Q2 ${fmt(c.manualQ2)}`}</span></div>`).join('')}</div>`:''}
+            ${getInstallmentApartChanges(item).length?`<div class="mt-3 space-y-1.5"><div class="text-[9px] uppercase tracking-wide font-bold text-gray-400">Cambios de apartado guardados</div>${getInstallmentApartChanges(item).map(c=>`<div class="rounded-lg bg-azul-50/55 border border-azul-100 px-3 py-2 text-[10px] text-gray-600 flex items-center justify-between gap-2"><div class="min-w-0"><b class="text-azul-600">${escapeHtml(c.apartPlan)}</b><span class="text-gray-400"> · desde ${MONTHS[c.month]} ${c.year}${c.apartPlan==='Apartado mensual'?'':` · Q1 ${fmt(c.manualQ1)} / Q2 ${fmt(c.manualQ2)}`}</span></div><div class="flex items-center gap-2 shrink-0"><button type="button" onclick="startInstallmentApartChangeEdit('${c.id}')" class="text-[9px] font-semibold text-azul-500 hover:text-azul-600">Editar</button><button type="button" onclick="removeInstallmentApartChange('${item?.id||''}','${c.id}')" class="text-[9px] font-semibold text-red-400 hover:text-red-500">Quitar</button></div></div>`).join('')}</div>`:''}
+            <input type="hidden" name="apartChangeEditId" value="">
             <div class="grid grid-cols-2 gap-3 mt-3">
               <div><label class="block text-[10px] text-gray-400 mb-1">Aplicar esta forma desde</label><select name="apartChangeMonth" class="w-full border rounded-lg px-3 py-2 text-sm bg-white">${MONTHS.map((m,i)=>`<option value="${i}" ${i===state.currentMonth?'selected':''}>${m}</option>`).join('')}</select></div>
               <div><label class="block text-[10px] text-gray-400 mb-1">Año</label><input type="number" name="apartChangeYear" value="${state.currentYear}" class="w-full border rounded-lg px-3 py-2 text-sm bg-white"></div>
@@ -4510,6 +4552,31 @@ function removeInstallmentPaymentChange(id,changeId){
   saveState();openInstallmentRecordModal(id);
 }
 
+function startInstallmentApartChangeEdit(changeId){
+  const form=document.querySelector('#modalContent form[data-record-type="installment"]');if(!form)return;
+  const item=(state.installments||[]).find(i=>i.id===form.dataset.itemId);if(!item)return;
+  const change=getInstallmentApartChanges(item).find(c=>c.id===changeId);if(!change)return;
+  const editId=form.querySelector('[name="apartChangeEditId"]');if(editId)editId.value=change.id;
+  const month=form.querySelector('[name="apartChangeMonth"]');if(month)month.value=String(change.month);
+  const year=form.querySelector('[name="apartChangeYear"]');if(year)year.value=String(change.year);
+  const apartMode=change.apartUiMode==='monthly'?'monthly':'biweekly';
+  const modeRadio=form.querySelector(`[name="apartMode"][value="${apartMode}"]`);if(modeRadio)modeRadio.checked=true;
+  const strategy=getQuincenaStrategyFromPlan(change.apartPlan,'apart');
+  const strategyRadio=form.querySelector(`[name="installmentApartStrategy"][value="${strategy}"]`);if(strategyRadio)strategyRadio.checked=true;
+  const q1=form.querySelector('[name="manualQ1"]');if(q1)q1.value=String(change.manualQ1||0);
+  const q2=form.querySelector('[name="manualQ2"]');if(q2)q2.value=String(change.manualQ2||0);
+  const count=form.querySelector('[name="apartQuincenas"]');if(count)count.value=String(change.apartQuincenas||item.apartQuincenas||2);
+  const first=form.querySelector('[name="apartFirstQuincena"]');if(first)first.value=change.apartFirstQuincena||item.apartFirstQuincena||'current-q1';
+  updateInstallmentProgressiveForm(form);
+  form.querySelector('[name="apartChangeMonth"]')?.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function removeInstallmentApartChange(id,changeId){
+  const item=(state.installments||[]).find(i=>i.id===id);if(!item)return;
+  if(!confirm('¿Quitar este cambio de apartado? Los checks que ya marcaste no se borrarán.'))return;
+  item.apartPlanChanges=getInstallmentApartChanges(item).filter(c=>c.id!==changeId);
+  saveState();openInstallmentRecordModal(id);
+}
+
 function syncInstallmentStartFields(form,source='monthly'){
   if(!form)return;
   const monthField=form.querySelector('[name="startMonth"]');
@@ -4537,7 +4604,9 @@ function updateInstallmentProgressiveForm(form){
   form.querySelector('[data-apart-monthly]')?.classList.toggle('hidden',apartMode!=='monthly');
   form.querySelector('[data-apart-biweekly]')?.classList.toggle('hidden',apartMode!=='biweekly');
   const apartStrategy=form.querySelector('[name="installmentApartStrategy"]:checked')?.value||'split';
-  form.querySelector('[data-apart-sequential]')?.classList.toggle('hidden',!(apartMode==='biweekly'&&paymentMode==='biweekly'&&apartStrategy==='split'));
+  // Si el pago es por quincenas, el calendario de cuotas ya define exactamente
+  // qué Q y qué monto corresponde; no mostramos un segundo calendario secuencial.
+  form.querySelector('[data-apart-sequential]')?.classList.add('hidden');
 
   // Mantener sincronizados los campos de inicio que usa la lógica existente.
   const startMonth=form.querySelector('[name="startMonth"]');
@@ -5516,23 +5585,48 @@ function buildPaymentScheduleFromForm(form){
   const targets=getSequentialQuincenaTargets(temp,'payment');
   const item=(state.installments||[]).find(i=>i.id===form.dataset.itemId);
   const saved=Array.isArray(item?.paymentSchedule)?item.paymentSchedule:[];
-  const amount=parseFloat(form.querySelector('[name="quincenaAmount"]')?.value)||0;
+  const baseAmount=parseFloat(form.querySelector('[name="quincenaAmount"]')?.value)||0;
   return targets.map((t,i)=>{
     const existing=saved.find(s=>parseInt(s.index)===i+1)||saved[i]||{};
     const defaultDay=t.q===1?(parseInt(item?.paymentDayQ1)||parseInt(item?.date)||1):(parseInt(item?.paymentDayQ2)||parseInt(item?.date)||16);
     const safe=Math.max(1,Math.min(defaultDay,getDaysInMonth(t.month,t.year)));
     const dateInput=form.querySelector(`[name="paymentScheduleDate_${i}"]`);
     const amountInput=form.querySelector(`[name="paymentScheduleAmount_${i}"]`);
-    return {index:i+1,month:t.month,year:t.year,q:t.q,date:dateInput?.value||existing.date||isoDate(t.year,t.month,safe),amount:parseFloat(amountInput?.value)||parseFloat(existing.amount)||amount};
+    const date=dateInput?.value||existing.date||isoDate(t.year,t.month,safe);
+    let month=t.month,year=t.year,q=t.q;
+    const parts=String(date||'').split('-').map(Number);
+    if(parts.length===3&&parts[0]&&parts[1]&&parts[2]){
+      year=parts[0];month=Math.max(0,Math.min(11,parts[1]-1));q=parts[2]<=15?1:2;
+    }
+    let amount=baseAmount;
+    if(amountInput&&amountInput.value!==''){
+      const typed=parseFloat(amountInput.value);if(Number.isFinite(typed))amount=typed;
+    }else if(existing.amount!==undefined&&existing.amount!==null&&existing.amount!==''){
+      const old=parseFloat(existing.amount);if(Number.isFinite(old))amount=old;
+    }
+    return {index:i+1,month,year,q,date,amount};
   });
 }
-function renderPaymentSchedulePreview(form){
+function getPaymentScheduleFormSignature(form){
+  return [
+    form?.querySelector('[name="paymentPlan"]')?.value||'',
+    form?.querySelector('[name="paymentQuincenas"]')?.value||'',
+    form?.querySelector('[name="quincenaAmount"]')?.value||'',
+    form?.querySelector('[name="startMonth"]')?.value||'',
+    form?.querySelector('[name="startYear"]')?.value||'',
+    form?.querySelector('[name="paymentFirstQuincena"]')?.value||''
+  ].join('|');
+}
+function renderPaymentSchedulePreview(form,force=false){
   const box=form?.querySelector('[data-payment-schedule-preview]');if(!box)return;
   const payment=form.querySelector('[name="paymentPlan"]')?.value||'';
-  if(payment!=='Dividir en varias quincenas de pago'){box.innerHTML='';box.classList.add('hidden');return;}
+  if(payment!=='Dividir en varias quincenas de pago'){box.innerHTML='';box.classList.add('hidden');box.dataset.signature='';return;}
+  const signature=getPaymentScheduleFormSignature(form);
+  if(!force&&box.dataset.signature===signature&&box.innerHTML.trim())return;
   box.classList.remove('hidden');
   const schedule=buildPaymentScheduleFromForm(form);
-  box.innerHTML=`<div class="rounded-xl border border-menta-100 bg-white/80 p-3"><div class="flex items-center justify-between gap-2 mb-2"><div><div class="text-xs font-bold text-gray-700">Calendario de cuotas</div><div class="text-[10px] text-gray-400">Escoge la fecha real de cada pago. La Q indica de qué cobro saldrá.</div></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-menta-50 text-menta-600 border border-menta-100">${schedule.length} cuotas</span></div><div class="space-y-2">${schedule.map((s,i)=>`<div class="grid grid-cols-[70px_1fr_120px] gap-2 items-end bg-gray-50 rounded-lg p-2"><div><div class="text-[9px] text-gray-400">Cuota</div><div class="text-xs font-bold text-lila-500">${s.index}/${schedule.length} · Q${s.q}</div><div class="text-[9px] text-gray-400">${MONTHS[s.month]} ${s.year}</div></div><div><label class="block text-[9px] text-gray-400 mb-1">Fecha real</label><input type="date" name="paymentScheduleDate_${i}" value="${s.date}" class="w-full border rounded-lg px-2 py-1.5 text-xs bg-white"></div><div><label class="block text-[9px] text-gray-400 mb-1">Monto</label><input type="number" step="any" name="paymentScheduleAmount_${i}" value="${s.amount||0}" class="w-full border rounded-lg px-2 py-1.5 text-xs bg-white"></div></div>`).join('')}</div></div>`;
+  box.innerHTML=`<div class="rounded-xl border border-menta-100 bg-white/80 p-3"><div class="flex items-center justify-between gap-2 mb-2"><div><div class="text-xs font-bold text-gray-700">Calendario de cuotas</div><div class="text-[10px] text-gray-400">La fecha real manda: la app usa ese día para decidir Q1/Q2 y el monto escrito aquí para tus totales.</div></div><span class="text-[10px] px-2 py-0.5 rounded-full bg-menta-50 text-menta-600 border border-menta-100">${schedule.length} cuotas</span></div><div class="space-y-2">${schedule.map((s,i)=>`<div class="grid grid-cols-[70px_1fr_120px] gap-2 items-end bg-gray-50 rounded-lg p-2"><div><div class="text-[9px] text-gray-400">Cuota</div><div class="text-xs font-bold text-lila-500">${s.index}/${schedule.length} · Q${s.q}</div><div class="text-[9px] text-gray-400">${MONTHS[s.month]} ${s.year}</div></div><div><label class="block text-[9px] text-gray-400 mb-1">Fecha real</label><input type="date" name="paymentScheduleDate_${i}" value="${s.date}" onchange="renderPaymentSchedulePreview(this.form,true)" class="w-full border rounded-lg px-2 py-1.5 text-xs bg-white"></div><div><label class="block text-[9px] text-gray-400 mb-1">Monto</label><input type="number" step="any" name="paymentScheduleAmount_${i}" value="${s.amount||0}" class="w-full border rounded-lg px-2 py-1.5 text-xs bg-white"></div></div>`).join('')}</div></div>`;
+  box.dataset.signature=signature;
 }
 function updatePlanFieldsPreview(form){
   if(!form)return;
@@ -5619,14 +5713,25 @@ function saveRecordForm(event,type,id=''){
       const selectedApartUiMode=fd.get('apartMode')||'biweekly';
       const selectedQ1=parseFloat(fd.get('manualQ1'))||0;
       const selectedQ2=parseFloat(fd.get('manualQ2'))||0;
-      const before=getInstallmentApartConfig(item,changeMonth,changeYear);
-      const changed=before.apartPlan!==selectedApartPlan || before.apartUiMode!==selectedApartUiMode || Math.abs((before.manualQ1||0)-selectedQ1)>.009 || Math.abs((before.manualQ2||0)-selectedQ2)>.009;
+      const selectedApartQuincenas=Math.max(1,parseInt(fd.get('apartQuincenas'))||parseInt(item.apartQuincenas)||2);
+      const selectedApartFirst=fd.get('apartFirstQuincena')||item.apartFirstQuincena||item.firstSetAside||'current-q1';
+      const editApartId=String(fd.get('apartChangeEditId')||'').trim();
+      const before=editApartId
+        ? (payload.apartPlanChanges.find(c=>c.id===editApartId)||getInstallmentApartConfig(item,changeMonth,changeYear))
+        : getInstallmentApartConfig(item,changeMonth,changeYear);
+      const changed=before.apartPlan!==selectedApartPlan || before.apartUiMode!==selectedApartUiMode || Math.abs((before.manualQ1||0)-selectedQ1)>.009 || Math.abs((before.manualQ2||0)-selectedQ2)>.009 || parseInt(before.apartQuincenas||2)!==selectedApartQuincenas || String(before.apartFirstQuincena||'')!==String(selectedApartFirst);
       if(changed){
         const firstMonth=monthIndex(payload.startMonth,payload.startYear);
         if(monthIndex(changeMonth,changeYear)<firstMonth){alert('El cambio de apartado no puede comenzar antes del primer mes de esta deuda.');return;}
-        const next={id:uid(),month:changeMonth,year:changeYear,apartPlan:selectedApartPlan,manualQ1:selectedQ1,manualQ2:selectedQ2,apartUiMode:selectedApartUiMode,createdAt:new Date().toISOString()};
-        const idx=payload.apartPlanChanges.findIndex(c=>parseInt(c.month)===changeMonth&&parseInt(c.year)===changeYear);
-        if(idx>=0)payload.apartPlanChanges[idx]={...payload.apartPlanChanges[idx],...next,id:payload.apartPlanChanges[idx].id};else payload.apartPlanChanges.push(next);
+        const previous=editApartId?payload.apartPlanChanges.find(c=>c.id===editApartId):null;
+        const next={id:editApartId||uid(),month:changeMonth,year:changeYear,apartPlan:selectedApartPlan,manualQ1:selectedQ1,manualQ2:selectedQ2,apartUiMode:selectedApartUiMode,apartQuincenas:selectedApartQuincenas,apartFirstQuincena:selectedApartFirst,createdAt:previous?.createdAt||new Date().toISOString()};
+        if(editApartId){
+          const idx=payload.apartPlanChanges.findIndex(c=>c.id===editApartId);
+          if(idx>=0)payload.apartPlanChanges[idx]=next;else payload.apartPlanChanges.push(next);
+        }else{
+          const idx=payload.apartPlanChanges.findIndex(c=>parseInt(c.month)===changeMonth&&parseInt(c.year)===changeYear);
+          if(idx>=0)payload.apartPlanChanges[idx]={...payload.apartPlanChanges[idx],...next,id:payload.apartPlanChanges[idx].id};else payload.apartPlanChanges.push(next);
+        }
         payload.apartPlanChanges.sort((a,b)=>monthIndex(a.month,a.year)-monthIndex(b.month,b.year));
       }
       // El registro base representa la historia anterior al primer cambio y no se reescribe.
@@ -5676,13 +5781,21 @@ function saveRecordForm(event,type,id=''){
 
     if(isQuincenal){
       payload.quincenaAmount=parseFloat(fd.get('quincenaAmount'))||0;
-      payload.paymentSchedule=buildPaymentScheduleFromForm(form);
+      payload.paymentSchedule=buildPaymentScheduleFromForm(form).map(s=>{
+        const parts=String(s.date||'').split('-').map(Number);
+        if(parts.length===3&&parts[0]&&parts[1]&&parts[2]){
+          return {...s,year:parts[0],month:Math.max(0,Math.min(11,parts[1]-1)),q:parts[2]<=15?1:2};
+        }
+        return s;
+      });
 
       // totalMonths queda como dato interno para compatibilidad con vistas históricas,
       // pero la usuaria ya no necesita capturarlo manualmente.
       if(payload.paymentSchedule.length){
-        const last=payload.paymentSchedule[payload.paymentSchedule.length-1];
-        payload.totalMonths=Math.max(1,monthIndex(last.month,last.year)-monthIndex(payload.startMonth,payload.startYear)+1);
+        const ordered=[...payload.paymentSchedule].sort((a,b)=>isoDateKey(a.date)-isoDateKey(b.date));
+        const first=ordered[0],last=ordered[ordered.length-1];
+        payload.startMonth=first.month;payload.startYear=first.year;payload.month=first.month;payload.year=first.year;
+        payload.totalMonths=Math.max(1,monthIndex(last.month,last.year)-monthIndex(first.month,first.year)+1);
       }else{
         payload.totalMonths=Math.max(1,Math.ceil((parseInt(payload.paymentQuincenas)||1)/2));
       }
