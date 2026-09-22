@@ -1947,7 +1947,12 @@ function renderBiweekly(){
     const cycleStartKey=isoDateKey(cycle.start);
     const cycleEndKey=isoDateKey(cycle.end);
     const isActive=todayKey>=cycleStartKey && todayKey<cycleEndKey;
-    const items=all.filter(i=>getAmountToSetAside(i,q)>0);
+    // Una fila puede existir por dos motivos distintos: porque hay dinero que
+    // apartar en esta Q o porque aquí vive el check de pago. Así un pago puede
+    // estar apartado en Q2 y pagarse en Q1 (o al revés) sin desaparecer.
+    const apartItems=all.filter(i=>getAmountToSetAside(i,q)>0);
+    const paidItems=all.filter(i=>shouldShowPaidCheckbox(i,q,state.currentMonth,state.currentYear));
+    const items=all.filter(i=>getAmountToSetAside(i,q)>0 || shouldShowPaidCheckbox(i,q,state.currentMonth,state.currentYear));
     const total=getBiweeklyPlannedTotal(q,state.currentMonth,state.currentYear);
     const apart=getBiweeklyApartedTotal(q,state.currentMonth,state.currentYear);
     const pending=Math.max(0,total-apart);
@@ -1957,14 +1962,13 @@ function renderBiweekly(){
     const extra=getExtraIncomeForQuincena(q,state.currentMonth,state.currentYear);
     const totalIncome=exactSalary+extra;
     const pct=total>0?Math.min(100,Math.round((apart/total)*100)):0;
-    const completed=items.filter(i=>isSetAside(i,q)).length;
-    const hasPaidCol=items.some(i=>shouldShowPaidCheckbox(i,q,state.currentMonth,state.currentYear));
-    const paidItems=items.filter(i=>shouldShowPaidCheckbox(i,q,state.currentMonth,state.currentYear));
+    const completed=apartItems.filter(i=>isSetAside(i,q)).length;
+    const hasPaidCol=paidItems.length>0;
     const paidTotal=paidItems.reduce((s,i)=>s+getPaymentPlanAmountForQ(i,q),0);
     const paidDone=paidItems.reduce((s,i)=>s+(isPaidForQuincena(i,q)?getPaymentPlanAmountForQ(i,q):0),0);
     const paidPct=paidTotal>0?Math.min(100,Math.round((paidDone/paidTotal)*100)):0;
     const paidCount=paidItems.filter(i=>isPaidForQuincena(i,q)).length;
-    const apartPendingCount=Math.max(0,items.length-completed);
+    const apartPendingCount=Math.max(0,apartItems.length-completed);
     const paidPendingCount=Math.max(0,paidItems.length-paidCount);
     const paidPendingAmount=Math.max(0,paidTotal-paidDone);
 
@@ -2001,16 +2005,22 @@ function renderBiweekly(){
     const requiresPaidCompletion=hasPaidCol && paidItems.length>0;
     const fullyComplete=apartDone && (!requiresPaidCompletion || payDone);
     const allMoneyDone=apartDone && hasPayments && payDone;
-    const statusLabel=total===0?'Sin apartados':fullyComplete?'Completa':(pct>0 || paidCount>0)?'En progreso':'Pendiente';
-    const statusCls=total===0?'bg-gray-50 text-gray-400 border-gray-100':fullyComplete?'bg-menta-50 text-menta-500 border-menta-100':(pct>0 || paidCount>0)?'bg-lila-50 text-lila-500 border-lila-100':'bg-red-50 text-red-400 border-red-100';
+    const statusLabel=total===0
+      ? (hasPayments?(payDone?'Pago completo':'Pago pendiente'):'Sin apartados')
+      : fullyComplete?'Completa':(pct>0 || paidCount>0)?'En progreso':'Pendiente';
+    const statusCls=total===0
+      ? (hasPayments?(payDone?'bg-menta-50 text-menta-500 border-menta-100':'bg-red-50 text-red-400 border-red-100'):'bg-gray-50 text-gray-400 border-gray-100')
+      : fullyComplete?'bg-menta-50 text-menta-500 border-menta-100':(pct>0 || paidCount>0)?'bg-lila-50 text-lila-500 border-lila-100':'bg-red-50 text-red-400 border-red-100';
 
     let rows=items.map(item=>{
       const type=getPaymentType(item),col=getPaymentCollection(item),cat=getCategoryVisual(type),aq=getAmountToSetAside(item,q);
       const amount=col==='savings'?(isSavingConfirmed(item)?getSavingRealAmount(item):getSavingPlannedAmount(item)):getPaymentAmount(item);
       const status=getPaymentStatusForQuincena(item,q),vis=getStatusVisual(status);
-      const apartadoCell=col==='savings'
-        ? `<input aria-label="Marcar ahorro apartado" type="checkbox" ${isSavingConfirmed(item)?'checked':''} onchange="toggleSavingConfirmed('${item.id}')" class="w-4 h-4 cursor-pointer ${isSavingConfirmed(item)?'accent-azul-500':'accent-durazno-500'}">`
-        : `<input aria-label="Marcar dinero apartado" type="checkbox" ${isSetAside(item,q)?'checked':''} onchange="toggleApartado('${item.id}','${col}',${q})" class="w-4 h-4 cursor-pointer ${isSetAside(item,q)?'accent-azul-500':'accent-durazno-500'}">`;
+      const apartadoCell=aq<=0
+        ? `<span class="text-gray-300">—</span>`
+        : col==='savings'
+          ? `<input aria-label="Marcar ahorro apartado" type="checkbox" ${isSavingConfirmed(item)?'checked':''} onchange="toggleSavingConfirmed('${item.id}')" class="w-4 h-4 cursor-pointer ${isSavingConfirmed(item)?'accent-azul-500':'accent-durazno-500'}">`
+          : `<input aria-label="Marcar dinero apartado" type="checkbox" ${isSetAside(item,q)?'checked':''} onchange="toggleApartado('${item.id}','${col}',${q})" class="w-4 h-4 cursor-pointer ${isSetAside(item,q)?'accent-azul-500':'accent-durazno-500'}">`;
       const paidCell=hasPaidCol?renderPaidCheckboxCell(item,q,col):'';
       return `<tr class="border-b border-gray-100 last:border-0 ${vis.row}">
         <td class="py-2.5 pr-1 text-xs align-middle">
@@ -2028,7 +2038,7 @@ function renderBiweekly(){
     }).join('');
 
     if(!rows){
-      rows=`<tr><td colspan="${hasPaidCol?6:5}" class="text-sm text-gray-400 py-8 text-center">No tienes apartados planeados para esta quincena.</td></tr>`;
+      rows=`<tr><td colspan="${hasPaidCol?6:5}" class="text-sm text-gray-400 py-8 text-center">No tienes apartados ni pagos programados para esta quincena.</td></tr>`;
     }
 
     const colgroup=hasPaidCol
@@ -2121,7 +2131,9 @@ function renderBiweekly(){
           <div class="flex items-center justify-between gap-3">
             <div class="text-sm font-bold text-gray-800">Desglose de la quincena</div>
             <div class="flex items-center gap-2 shrink-0 justify-end">
-              <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full ${completed===items.length?'bg-azul-50 text-azul-500 border border-azul-100':'bg-red-50 text-red-400 border border-red-100'} whitespace-nowrap">${completed}/${items.length} apartados</span>
+              ${apartItems.length
+                ? `<span class="text-[11px] font-semibold px-2.5 py-1 rounded-full ${completed===apartItems.length?'bg-azul-50 text-azul-500 border border-azul-100':'bg-red-50 text-red-400 border border-red-100'} whitespace-nowrap">${completed}/${apartItems.length} apartados</span>`
+                : `<span class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-50 text-gray-400 border border-gray-100 whitespace-nowrap">Sin apartados</span>`}
               ${hasPaidCol?`<span class="text-[11px] font-semibold px-2.5 py-1 rounded-full ${paidCount===paidItems.length?'bg-menta-50 text-menta-500 border border-menta-100':'bg-red-50 text-red-400 border border-red-100'} whitespace-nowrap">${paidCount}/${paidItems.length} pagados</span>`:''}
             </div>
           </div>
@@ -4090,6 +4102,11 @@ function openInstallmentRecordModal(id=''){
                         getPaymentPlan(item||{})==='Pagar todo en Q2' ? 2 :
                         getPaymentPlan(item||{})==='Pagar todo en Q1' ? 1 :
                         (date<=15?1:2));
+  // El check de "Pagado" es una decisión independiente del día numérico.
+  // En pagos mensuales puedes corregir directamente Q1/Q2; si el cambio solo
+  // aplica desde cierto mes, se usa el historial de cambios de quincena.
+  const paidCheckQ=paymentPlanValue==='Pagar todo en Q2'?2:
+                   paymentPlanValue==='Pagar todo en Q1'?1:paymentMonthlyQ;
 
   const apartQ1Raw=parseFloat(effectiveApartConfig?.manualQ1??val('manualQ1',0))||0;
   const apartQ2Raw=parseFloat(effectiveApartConfig?.manualQ2??val('manualQ2',0))||0;
@@ -4192,9 +4209,24 @@ function openInstallmentRecordModal(id=''){
             </div>
 
             <div>
-              <label class="block text-xs mb-1 text-gray-500">${item&&hasHistoricalActivity?'Día original de pago / vencimiento':'Día de pago / vencimiento'}</label>
-              <input type="number" min="1" max="31" name="date" value="${date}" ${item&&hasHistoricalActivity?'readonly':''} oninput="updateInstallmentProgressiveForm(this.form)" class="w-full border rounded-lg px-3 py-2 text-sm ${item&&hasHistoricalActivity?'bg-gray-50 text-gray-500':'bg-white'}">
-              <p class="text-[10px] text-gray-400 mt-1">${item&&hasHistoricalActivity?`Este día pertenece a tu historial en Q${historicalPaymentQ}. Para mover las siguientes cuotas usa el bloque de abajo; así no se modifica lo anterior.`:'La app lo ubicará automáticamente en Q1 o Q2 según el día.'}</p>
+              <label class="block text-xs mb-1 text-gray-500">Día de pago / vencimiento</label>
+              <input type="number" min="1" max="31" name="date" value="${date}" oninput="updateInstallmentProgressiveForm(this.form)" class="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+              <p class="text-[10px] text-gray-400 mt-1">Puedes corregir este día directamente cuando fue un error de captura. Si el día/quincena cambia solo a partir de cierto mes, usa “Cambiar de quincena” para conservar lo anterior.</p>
+            </div>
+
+            <div class="rounded-xl border border-menta-100 bg-white/80 p-3">
+              <div class="flex items-start justify-between gap-3 mb-2.5">
+                <div>
+                  <div class="text-[11px] font-bold text-gray-700">¿Dónde quieres el check de “Pagado”?</div>
+                  <div class="text-[10px] text-gray-400 mt-0.5">Esto no depende del día. Elige la quincena donde realmente haces este pago.</div>
+                </div>
+                <span class="text-[9px] px-2 py-0.5 rounded-full bg-menta-50 text-menta-600 border border-menta-100 shrink-0">Check</span>
+              </div>
+              <div class="flex gap-2" data-paid-check-buttons>
+                ${installmentModeButton('monthlyPaidCheckQ','1',String(paidCheckQ),'Pagado en Q1','check-square','menta')}
+                ${installmentModeButton('monthlyPaidCheckQ','2',String(paidCheckQ),'Pagado en Q2','check-square','menta')}
+              </div>
+              <p class="text-[9.5px] text-gray-400 mt-2">Si el pago es <b>por quincenas</b>, la app mostrará el check en cada quincena que tenga una cuota.</p>
             </div>
 
             ${item?`<div class="rounded-xl border border-menta-100 bg-white/80 p-3">
@@ -4521,11 +4553,10 @@ function updateInstallmentProgressiveForm(form){
   const dateField=form.querySelector('[name="date"]');
   const date=Math.max(1,Math.min(31,parseInt(dateField?.value)||1));
   if(paymentPlan){
-    const originalPlan=form.querySelector('[name="originalPaymentPlan"]')?.value||'';
-    const keepHistoricalQ=!!dateField?.readOnly && ['Pagar todo en Q1','Pagar todo en Q2'].includes(originalPlan);
+    const paidCheckQ=parseInt(form.querySelector('[name="monthlyPaidCheckQ"]:checked')?.value)===2?2:1;
     paymentPlan.value=paymentMode==='biweekly'
       ? 'Dividir en varias quincenas de pago'
-      : (keepHistoricalQ?originalPlan:(date<=15?'Pagar todo en Q1':'Pagar todo en Q2'));
+      : (paidCheckQ===2?'Pagar todo en Q2':'Pagar todo en Q1');
   }
 
   const apartPlan=form.querySelector('[name="apartPlan"]');
@@ -4579,7 +4610,8 @@ function updateInstallmentProgressiveForm(form){
     const concept=form.querySelector('[name="concept"]')?.value?.trim()||'Este gasto';
     let payText='';
     if(paymentMode==='monthly'){
-      payText=`${months} ${months===1?'mes':'meses'} · ${fmt(monthly)} al mes · vence el día ${date}`;
+      const paidCheckQ=parseInt(form.querySelector('[name="monthlyPaidCheckQ"]:checked')?.value)===2?2:1;
+      payText=`${months} ${months===1?'mes':'meses'} · ${fmt(monthly)} al mes · vence el día ${date} · check Pagado en Q${paidCheckQ}`;
     }else{
       const count=Math.max(1,parseInt(form.querySelector('[name="paymentQuincenas"]')?.value)||1);
       const first=form.querySelector('[name="paymentFirstQuincena"]')?.value||'current-q1';
@@ -4622,6 +4654,7 @@ function updateInstallmentProgressiveForm(form){
     });
   };
   paintGroup('paymentMode','menta');
+  paintGroup('monthlyPaidCheckQ','menta');
   paintGroup('apartMode','azul');
   paintGroup('installmentApartStrategy','azul');
 
